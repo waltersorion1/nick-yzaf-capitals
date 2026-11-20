@@ -1,0 +1,49 @@
+{
+  "name": "nycap",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": "^22.12.0 || >=24.0.0"
+  },
+  "scripts": {
+    "dev": "tsx watch src/server.ts",
+    "build": "tsc",
+    "start": "node dist/src/server.js",
+    "test": "vitest run",
+    "db:generate": "prisma generate",
+    "db:migrate": "prisma migrate deploy",
+    "db:seed": "tsx prisma/seed.ts",
+    "assets": "node scripts/copy-assets.mjs",
+    "postinstall": "npm run assets"
+  },
+  "dependencies": {
+    "@prisma/adapter-pg": "7.10.1",
+    "@prisma/client": "7.10.1",
+    "bootstrap": "5.3.9",
+    "connect-pg-simple": "10.0.0",
+    "dotenv": "17.2.3",
+    "express": "5.1.0",
+    "express-rate-limit": "8.7.5",
+    "express-session": "1.18.2",
+    "helmet": "8.1.0",
+    "pg": "8.16.3",
+    "zod": "4.6.7"
+  },
+  "devDependencies": {
+    "@types/connect-pg-simple": "7.0.3",
+    "@types/express": "5.0.5",
+    "@types/express-session": "1.18.2",
+    "@types/node": "24.10.1",
+    "@types/pg": "8.15.6",
+    "@types/supertest": "6.0.3",
+    "prisma": "7.10.1",
+    "supertest": "7.1.4",
+    "tsx": "4.20.6",
+    "typescript": "5.9.3",
+    "vitest": "5.1.1"
+  },
+  "overrides": {
+    "effect": "3.22.1"
+  }
+}

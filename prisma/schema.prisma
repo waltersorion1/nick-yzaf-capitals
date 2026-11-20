@@ -1,0 +1,82 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum Role {
+  ADMIN
+  SHAREHOLDER
+}
+
+model Company {
+  id      String       @id @default(uuid()) @db.Uuid
+  name    String       @unique
+  classes ShareClass[]
+
+  @@map("companies")
+}
+
+model ShareClass {
+  id           String         @id @default(uuid()) @db.Uuid
+  companyId    String         @db.Uuid
+  company      Company        @relation(fields: [companyId], references: [id])
+  name         String
+  issuedShares BigInt
+  holdings     Shareholding[]
+
+  @@unique([companyId, name])
+  @@map("share_classes")
+}
+
+model User {
+  id              String       @id @default(uuid()) @db.Uuid
+  email           String       @unique
+  passwordHash    String?
+  role            Role         @default(SHAREHOLDER)
+  active          Boolean      @default(true)
+  inviteHash      String?      @unique
+  inviteExpiresAt DateTime?
+  createdAt       DateTime     @default(now())
+  shareholder     Shareholder?
+  auditLogs       AuditLog[]
+
+  @@map("users")
+}
+
+model Shareholder {
+  id         String         @id @default(uuid()) @db.Uuid
+  userId     String         @unique @db.Uuid
+  user       User           @relation(fields: [userId], references: [id])
+  legalName  String
+  verifiedAt DateTime?
+  holdings   Shareholding[]
+
+  @@map("shareholders")
+}
+
+model Shareholding {
+  id            String      @id @default(uuid()) @db.Uuid
+  shareholderId String      @db.Uuid
+  shareholder   Shareholder @relation(fields: [shareholderId], references: [id])
+  shareClassId  String      @db.Uuid
+  shareClass    ShareClass  @relation(fields: [shareClassId], references: [id])
+  quantity      BigInt
+  recordedAt    DateTime    @default(now())
+
+  @@unique([shareholderId, shareClassId])
+  @@map("shareholdings")
+}
+
+model AuditLog {
+  id        String   @id @default(uuid()) @db.Uuid
+  actorId   String?  @db.Uuid
+  actor     User?    @relation(fields: [actorId], references: [id])
+  action    String
+  targetId  String?
+  createdAt DateTime @default(now())
+
+  @@map("audit_logs")
+}

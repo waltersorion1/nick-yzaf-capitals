@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <meta name="theme-color" content="#0D1424" />
+    <title>NyCap · Private pilot</title>
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <link rel="apple-touch-icon" href="/icons/icon-192.png" />
+    <link rel="stylesheet" href="/assets/bootstrap-5.3.9.min.css" />
+    <link rel="stylesheet" href="/assets/shell-v1.css" />
+    <script type="module" src="/assets/app-v1.js"></script>
+  </head>
+  <body>
+    <main>
+      <header>
+        <span>NYCAP</span>
+        <p>Private shareholder pilot · Day 1 foundation</p>
+      </header>
+      <p id="connection" role="status"></p>
+      <h1>Secure access</h1>
+      <p>
+        Access is created or invited by an administrator. No public
+        registration.
+      </p>
+      <form id="login">
+        <label
+          >Email<input
+            name="email"
+            type="email"
+            autocomplete="username"
+            required /></label
+        ><label
+          >Password<input
+            name="password"
+            type="password"
+            autocomplete="current-password"
+            required
+            maxlength="128" /></label
+        ><button>Sign in</button>
+      </form>
+      <section id="account" hidden>
+        <h2>Signed in</h2>
+        <p id="identity"></p>
+        <p>Portfolio screens will be added in a later phase.</p>
+        <button id="logout">Sign out</button>
+      </section>
+      <details>
+        <summary>Accept an invitation</summary>
+        <form id="invite">
+          <label
+            >Invitation token<input
+              name="token"
+              required
+              autocomplete="off"
+              pattern="[a-f0-9]{64}" /></label
+          ><label
+            >New password (12–128 characters)<input
+              name="password"
+              type="password"
+              autocomplete="new-password"
+              minlength="12"
+              maxlength="128"
+              required /></label
+          ><button>Activate account</button>
+        </form>
+      </details>
+      <p id="message" role="status" aria-live="polite"></p>
+      <button id="update" hidden>Update app and reload</button>
+      <footer>
+        Offline mode cannot display or modify private holdings. Installation
+        options vary by browser.
+      </footer>
+    </main>
+  </body>
+</html>
