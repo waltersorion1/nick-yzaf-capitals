@@ -1,5 +1,19 @@
-# Repository agent instructions
+# NyCap agent working agreement
 
-Read and follow [Agent.md](Agent.md) and read [Codex_Playbook.md](Codex_Playbook.md) completely before day implementation.
+## Golden rule: complete, test, commit, and push
 
-Standing owner instruction: after successfully completing and testing a requested day's objective, commit all appropriate project changes and push to the connected repository's `main` branch without asking again. Follow the delivery checks and secret exclusions in `Agent.md`. Do not force-push or include secrets. Report the commit and verified push result.
+After completing a day's objective and successfully running the checks required for that day, commit all project changes for that completed day and push them to the connected GitHub repository's `main` branch. This is standing authorization from the project owner; do not ask for confirmation again for this routine commit and push.
+
+- Read `Codex_Playbook.md` completely before implementing a day. Execute only the requested day and stop after that day's work and delivery.
+- Complete the implementation and run the relevant tests and day gates before committing. Never claim an unexecuted check passed. Document failures, untested areas, and limitations honestly.
+- Include the day's source, migrations, fictional seed data, tests, lockfile, documentation, and report in the commit. Exclude secrets, `.env`, credentials, dependency directories, build artifacts, and unrelated personal files.
+- Check Git status, the connected remote, and remote `main` before delivery. Preserve the owner's work. Resolve routine integration issues without discarding changes; never force-push or rewrite shared history.
+- Use a clear commit message describing the completed day. Push to `origin/main` and verify that local `HEAD` matches remote `main`.
+- If a required test fails or GitHub rejects the push, fix the issue when possible. Otherwise report the exact blocker; never describe the day as successfully delivered to GitHub.
+- Report the commit hash, push result, executed checks, migration status, known limitations, and next dependencies in the handoff.
+
+## Project boundaries
+
+Follow the playbook's locked stack, security baseline, fictional-data rule, and PWA privacy contract. Explain unfamiliar TypeScript, PostgreSQL, and Prisma syntax using JavaScript/MySQL comparisons. Do not add later-day features, real investor data, financial transactions, or deployment without an applicable request.
+
+`AGENTS.md` is the single repository instruction file for coding agents.
