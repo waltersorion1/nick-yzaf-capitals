@@ -5,11 +5,13 @@ import express, {
 import session from "express-session";
 import helmet from "helmet";
 import { rateLimit } from "express-rate-limit";
-import { randomBytes, timingSafeEqual } from "node:crypto";
+import { randomBytes, randomUUID, timingSafeEqual } from "node:crypto";
 import { resolve } from "node:path";
 import { PrismaClient, Role } from "@prisma/client";
 import { z, ZodError } from "zod";
 import { hashPassword, verifyPassword, tokenHash } from "./password.js";
+import { recordRoutes } from "./records/routes.js";
+import { RecordError } from "./records/common.js";
 const password = z.string().min(12).max(128);
 const email = z
   .string()
@@ -34,9 +36,14 @@ export function createApp({
     throw new Error("SESSION_SECRET must contain at least 32 characters");
   const app = express();
   app.disable("x-powered-by");
+  app.set("json replacer", (_key: string, value: unknown) =>
+    typeof value === "bigint" ? value.toString() : value,
+  );
   if (production) app.set("trust proxy", 1);
   app.use(helmet({ strictTransportSecurity: production ? undefined : false }));
   app.use("/api", (_req, res, next) => {
+    res.locals.requestId = randomUUID();
+    res.set("X-Request-ID", res.locals.requestId);
     res.set("Cache-Control", "no-store");
     next();
   });
@@ -226,6 +233,7 @@ export function createApp({
     }
     res.sendStatus(204);
   });
+  app.use("/api", recordRoutes(db, auth, admin));
   app.use("/api", (_req, res) => {
     res.status(404).json({ error: "Not found" });
   });
@@ -237,6 +245,26 @@ export function createApp({
     }),
   );
   const errors: ErrorRequestHandler = (err, _req, res, _next) => {
+    if (err instanceof RecordError) {
+      res.status(err.status).json({ error: err.message });
+      return;
+    }
+    if (err?.code === "P2025") {
+      res.status(404).json({ error: "Record not found" });
+      return;
+    }
+    if (
+      ["P2003", "P2004", "P2034"].includes(err?.code) ||
+      ["23503", "23514", "40001", "40P01"].includes(
+        err?.meta?.code ?? err?.meta?.driverAdapterError?.cause?.originalCode,
+      )
+    ) {
+      res.status(409).json({
+        error:
+          "Record conflicts with register constraints; refresh and check related records",
+      });
+      return;
+    }
     if (err instanceof ZodError) {
       res.status(400).json({
         error: "Invalid input",

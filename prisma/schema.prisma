@@ -32,51 +32,91 @@ model ShareClass {
 }
 
 model User {
-  id              String       @id @default(uuid()) @db.Uuid
-  email           String       @unique
+  id              String         @id @default(uuid()) @db.Uuid
+  email           String         @unique
   passwordHash    String?
-  role            Role         @default(SHAREHOLDER)
-  active          Boolean      @default(true)
-  inviteHash      String?      @unique
+  role            Role           @default(SHAREHOLDER)
+  active          Boolean        @default(true)
+  inviteHash      String?        @unique
   inviteExpiresAt DateTime?
-  createdAt       DateTime     @default(now())
+  createdAt       DateTime       @default(now())
   shareholder     Shareholder?
   auditLogs       AuditLog[]
+  holdingEvents   HoldingEvent[]
 
   @@map("users")
 }
 
 model Shareholder {
-  id         String         @id @default(uuid()) @db.Uuid
-  userId     String         @unique @db.Uuid
-  user       User           @relation(fields: [userId], references: [id])
-  legalName  String
-  verifiedAt DateTime?
-  holdings   Shareholding[]
+  id                    String         @id @default(uuid()) @db.Uuid
+  userId                String         @unique @db.Uuid
+  user                  User           @relation(fields: [userId], references: [id])
+  legalName             String
+  verifiedAt            DateTime?
+  verificationReference String?
+  holdings              Shareholding[]
 
   @@map("shareholders")
 }
 
 model Shareholding {
-  id            String      @id @default(uuid()) @db.Uuid
-  shareholderId String      @db.Uuid
-  shareholder   Shareholder @relation(fields: [shareholderId], references: [id])
-  shareClassId  String      @db.Uuid
-  shareClass    ShareClass  @relation(fields: [shareClassId], references: [id])
-  quantity      BigInt
-  recordedAt    DateTime    @default(now())
+  id                    String         @id @default(uuid()) @db.Uuid
+  shareholderId         String         @db.Uuid
+  shareholder           Shareholder    @relation(fields: [shareholderId], references: [id])
+  shareClassId          String         @db.Uuid
+  shareClass            ShareClass     @relation(fields: [shareClassId], references: [id])
+  quantity              BigInt
+  recordedAt            DateTime       @default(now())
+  verifiedAt            DateTime?
+  verificationReference String?
+  events                HoldingEvent[]
 
   @@unique([shareholderId, shareClassId])
   @@map("shareholdings")
 }
 
 model AuditLog {
-  id        String   @id @default(uuid()) @db.Uuid
-  actorId   String?  @db.Uuid
-  actor     User?    @relation(fields: [actorId], references: [id])
-  action    String
-  targetId  String?
-  createdAt DateTime @default(now())
+  id         String   @id @default(uuid()) @db.Uuid
+  actorId    String?  @db.Uuid
+  actor      User?    @relation(fields: [actorId], references: [id])
+  action     String
+  targetId   String?
+  createdAt  DateTime @default(now())
+  targetType String?
+  reason     String?
+  requestId  String?  @db.Uuid
+  metadata   Json?
 
+  @@index([targetId, createdAt])
   @@map("audit_logs")
+}
+
+enum HoldingEventKind {
+  OPENING
+  ADJUSTMENT
+  VERIFICATION
+  LEGACY_BASELINE
+}
+
+model HoldingEvent {
+  id              String           @id @default(uuid()) @db.Uuid
+  holdingId       String           @db.Uuid
+  holding         Shareholding     @relation(fields: [holdingId], references: [id], onDelete: Restrict)
+  actorId         String?          @db.Uuid
+  actor           User?            @relation(fields: [actorId], references: [id], onDelete: Restrict)
+  sequence        Int
+  kind            HoldingEventKind
+  beforeQuantity  BigInt
+  delta           BigInt
+  afterQuantity   BigInt
+  reason          String
+  sourceReference String
+  verifiedAt      DateTime?
+  effectiveAt     DateTime
+  createdAt       DateTime         @default(now())
+  requestId       String?          @db.Uuid
+
+  @@unique([holdingId, sequence])
+  @@index([holdingId, createdAt])
+  @@map("holding_events")
 }

@@ -1,6 +1,6 @@
-# NyCap â€” Day 1 foundation
+# NyCap â€” Days 1-2 foundation
 
-Express + strict TypeScript API, PostgreSQL + Prisma, and a same-origin Vanilla JS ES module shell. This repository implements **Day 1 only** of `Codex_Playbook.md`, read in full. There are no holding APIs, admin record CRUD, valuation screens, trading or payment functions.
+Express + strict TypeScript API, PostgreSQL + Prisma, and a same-origin Vanilla JS ES module shell. This repository implements **Days 1 and 2** of `Codex_Playbook.md`, read in full. Day 2 adds protected company/class/profile CRUD, verified openings, immutable corrections and account-isolated holding reads. Portfolio/admin screens, valuations, trading and payments remain outside the implemented scope.
 
 ## Windows / VS Code setup
 
@@ -66,7 +66,7 @@ npm run build
 npm start
 ```
 
-Expected: generated Prisma Client; one applied migration `202611210001_day1`; a fictional-seed confirmation; successful TypeScript compilation; `NyCap listening on 3000`. Open **http://localhost:3000**. For live development use `npm run dev` instead of `npm start`.
+Expected: generated Prisma Client; the Day 1 and Day 2 migrations applied; a fictional-seed confirmation; successful TypeScript compilation; `NyCap listening on 3000`. Open **http://localhost:3000**. For live development use `npm run dev` instead of `npm start`.
 
 Demo emails: `admin@example.test` and `shareholder@example.test`; both use your explicitly chosen `SEED_ADMIN_PASSWORD`. Every company and person is fictional. Never use this seed for a live register. Rerunning it does not overwrite existing users or holdings; it appends a seed audit entry. There is no default/hardcoded password and no automatic public admin bootstrap. Production rejects this development seed.
 
@@ -126,3 +126,21 @@ Manifest, 192/512 PNG maskable icons, service worker registration, public static
 For updates change the cache version and asset filenames/allowlist, visit online, then choose **Update app and reload** when the waiting worker is detected. The worker does not activate itself over an existing session. Full browser installation, update, mobile and privacy acceptance tests remain Day 3/6 work; HTTP asset tests do not establish device installability. Android/desktop Chrome may offer Install; on iOS Safari use Share â†’ Add to Home Screen where available. Native prompts vary.
 
 See [the Day 1 validation report](docs/DAY1_REPORT.md) for executed checks and [architecture notes](docs/ARCHITECTURE.md) for TypeScript/Prisma learning notes and security boundaries. Before deployment: configure HTTPS, exactly one trusted reverse proxy, private secrets, database TLS appropriate to your provider, restricted DB permissions and a production-only admin provisioning process. No deployment or real-user invitation is included in Day 1.
+
+## Day 2 records and migration
+
+See [Day 2 API/workflow](docs/DAY2_API.md), [architecture notes](docs/ARCHITECTURE.md) and [executed Day 2 results](docs/DAY2_REPORT.md). No frontend screens were added. Use the administrator session and CSRF token for admin CRUD. `/api/me/holdings` and `/api/me/holdings/:id` return only the current user's verified records. All share counts and percentages are strings; private responses remain no-store.
+
+After pulling Day 2, stop the dev server, run the following and restart:
+
+```powershell
+npm ci
+npm run db:generate
+npm run db:migrate
+npm run build
+npm run dev
+```
+
+The new migration adds the ledger, verification/evidence fields and audit metadata, without dropping tables or changing existing quantities. **Day 1 balances become unverified legacy baselines**, hidden from shareholder reads until verified against source evidence using the API workflow. Existing profile dates need a source reference as well. If previous holdings exceed a class total, migration stops and rolls back; reconcile source records before retrying. Back up any database containing real records before migrations.
+
+Migrate the separate test DB using the earlier test instructions before `npm test`. Tests retain fictional register records and immutable events: use a disposable DB only. The optional seed now records openings through the ledger and verifies only its explicitly fictional fixtures. It commits demo metadata first and missing openings separately, so an interrupted development seed can be rerun. It preserves existing passwords and quantities and never resets the database. Do not seed real records.
