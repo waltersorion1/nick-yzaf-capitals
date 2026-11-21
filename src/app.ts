@@ -10,6 +10,7 @@ import { resolve } from "node:path";
 import { PrismaClient, Role } from "@prisma/client";
 import { z, ZodError } from "zod";
 import { hashPassword, verifyPassword, tokenHash } from "./password.js";
+import { reportingRoutes } from "./reporting/routes.js";
 import { recordRoutes } from "./records/routes.js";
 import { RecordError } from "./records/common.js";
 const password = z.string().min(12).max(128);
@@ -233,6 +234,7 @@ export function createApp({
     }
     res.sendStatus(204);
   });
+  app.use("/api", reportingRoutes(db, auth, admin));
   app.use("/api", recordRoutes(db, auth, admin));
   app.use("/api", (_req, res) => {
     res.status(404).json({ error: "Not found" });

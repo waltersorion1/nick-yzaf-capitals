@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { createDatabase } from "../../src/db.js";
+import { ReportingService } from "../../src/reporting/service.js";
 import { RecordService } from "../../src/records/service.js";
 import { hashPassword } from "../../src/password.js";
 export default async function setup() {
@@ -70,7 +71,114 @@ export default async function setup() {
       quantity: 200n,
       ...evidence,
     });
+    const reporter = await db.user.create({
+      data: { email: `e2e-report-${suffix}@example.test`, passwordHash },
+    });
+    const reportCompany = await service.saveCompany(context, null, {
+      name: `FICTIONAL Reporting Company ${suffix}`,
+      reason,
+    });
+    const reportClass = await service.createClass(context, {
+      companyId: reportCompany.id,
+      name: "Ordinary",
+      issuedShares: 1000n,
+      reason,
+    });
+    const reportProfile = await service.createProfile(context, {
+      userId: reporter.id,
+      legalName: "FICTIONAL Report Reader",
+      ...verification,
+    });
+    await service.open(context, {
+      shareholderId: reportProfile.id,
+      shareClassId: reportClass.id,
+      quantity: 4n,
+      ...evidence,
+    });
+    const reporting = new ReportingService(db);
+    const announcement = await reporting.createAnnouncement(context, {
+      companyId: reportCompany.id,
+      title: "FICTIONAL published report update",
+      body: "FICTIONAL private announcement body",
+      datedAt: verification.verifiedAt,
+      sourceReference: "FICTIONAL-BROWSER-ANNOUNCEMENT",
+      reason,
+    });
+    await reporting.transition(
+      context,
+      "announcements",
+      announcement.id,
+      "publish",
+      reason,
+    );
+    for (const [asOf, price] of [
+      ["2026-01-01", "2.5"],
+      ["2026-01-02", "3.25"],
+    ] as const) {
+      const snapshot = await reporting.createValuation(context, {
+        shareClassId: reportClass.id,
+        asOf: new Date(asOf + "T00:00:00Z"),
+        pricePerShare: price,
+        currency: "NGN",
+        methodology: "FICTIONAL source methodology with independent limits",
+        sourceReference: "FICTIONAL-BROWSER-VALUE",
+        reason,
+      });
+      await reporting.transition(
+        context,
+        "valuations",
+        snapshot.id,
+        "publish",
+        reason,
+      );
+    }
+    await reporting.createValuation(context, {
+      shareClassId: reportClass.id,
+      asOf: new Date("2026-01-03T00:00:00Z"),
+      pricePerShare: "999",
+      currency: "NGN",
+      methodology: "FICTIONAL draft not visible to readers",
+      sourceReference: "FICTIONAL-DRAFT",
+      reason,
+    });
+    const declaration = await reporting.createDividend(context, {
+      status: "DECLARED",
+      shareholderId: reportProfile.id,
+      shareClassId: reportClass.id,
+      amount: "100",
+      currency: "NGN",
+      datedAt: verification.verifiedAt,
+      reference: "FICTIONAL-BROWSER-DECLARATION",
+      reason,
+    });
+    await reporting.transition(
+      context,
+      "dividend-records",
+      declaration.id,
+      "publish",
+      reason,
+    );
+    const payment = await reporting.createDividend(context, {
+      status: "PAID",
+      declarationId: declaration.id,
+      amount: "40",
+      datedAt: verification.verifiedAt,
+      reference: "FICTIONAL-BROWSER-PAYMENT",
+      reason,
+    });
+    await reporting.transition(
+      context,
+      "dividend-records",
+      payment.id,
+      "publish",
+      reason,
+    );
     process.env.E2E_FIXTURE = JSON.stringify({
+      reportDeclaration: declaration.id,
+      reporter: reporter.email,
+      reportCompany: reportCompany.name,
+      reportCompanyId: reportCompany.id,
+      reportClass: reportClass.id,
       admin: admin.email,
       member: member.email,
       other: other.email,

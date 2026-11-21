@@ -276,3 +276,187 @@ test("loading state is announced before records arrive", async ({ page }) => {
     page.getByRole("heading", { name: "My holdings" }),
   ).toBeVisible();
 });
+
+test("published valuation chart, exact value and separate dividend totals stay private offline", async ({
+  page,
+  context,
+}) => {
+  await login(page, "reporter");
+  await expect(page.getByText("NGN 13.00", { exact: true })).toBeVisible();
+  await page
+    .getByRole("navigation")
+    .getByRole("link", { name: "Companies", exact: false })
+    .click();
+  await page.getByRole("heading", { name: fixture().reportCompany }).click();
+  await expect(
+    page.getByRole("heading", { name: "Indicative valuation history" }),
+  ).toBeVisible();
+  await expect(
+    page.getByText("Indicative only - not a live market quote.", {
+      exact: true,
+    }),
+  ).toBeVisible();
+  await expect(
+    page.getByText("FICTIONAL private announcement body", { exact: true }),
+  ).toBeVisible();
+  await expect(page.locator("canvas")).toHaveCount(1);
+  const points = await page.evaluate(() => {
+    const chart = (window as any).Chart.getChart(
+      document.querySelector("canvas"),
+    );
+    return chart.data.datasets[0].data;
+  });
+  expect(points).toEqual([2.5, 3.25]);
+  await expect(page.locator(".dividend-totals")).toContainText(
+    "Declared: NGN 100.00",
+  );
+  await expect(page.locator(".dividend-totals")).toContainText(
+    "Paid: NGN 40.00",
+  );
+  await expect(
+    page.getByText("FICTIONAL draft not visible to readers"),
+  ).toHaveCount(0);
+  await page.screenshot({
+    path: `test-results/reporting-${test.info().project.name}.png`,
+    fullPage: true,
+  });
+  await ready(page);
+  const stored = await page.evaluate(async () => {
+    let body = "";
+    for (const key of await caches.keys()) {
+      const cache = await caches.open(key);
+      for (const request of await cache.keys())
+        body += await (await cache.match(request))!.text();
+    }
+    return {
+      body,
+      local: localStorage.length,
+      session: sessionStorage.length,
+      dbs: await indexedDB.databases(),
+    };
+  });
+  expect(stored.body).not.toContain(fixture().reporter);
+  expect(stored.body).not.toContain("FICTIONAL private announcement body");
+  expect(stored.body).not.toContain("FICTIONAL-BROWSER-VALUE");
+  expect(stored.local + stored.session).toBe(0);
+  expect(stored.dbs).toHaveLength(0);
+  await expect(page.locator("canvas")).toHaveCount(1);
+  await context.setOffline(true);
+  await expect(
+    page.getByRole("heading", { name: "You are offline" }),
+  ).toBeVisible();
+  expect(
+    await page.evaluate(
+      () => Object.keys((window as any).Chart.instances).length,
+    ),
+  ).toBe(0);
+  await expect(page.locator("canvas")).toHaveCount(0);
+  await page.reload();
+  expect(await page.content()).not.toContain(
+    "FICTIONAL private announcement body",
+  );
+});
+test("administrator saves, publishes and withdraws source records through the company UI", async ({
+  page,
+}) => {
+  await login(page, "admin");
+  await page.goto("/#company/" + fixture().reportCompanyId);
+  await expect(
+    page.getByRole("heading", { name: fixture().reportCompany }),
+  ).toBeVisible();
+  await page.getByText("Add company announcement", { exact: true }).click();
+  const form = page.locator('[data-report-form="announcements"]');
+  const title = "FICTIONAL browser publication " + test.info().project.name;
+  await form.getByLabel("Title", { exact: true }).fill(title);
+  await form.getByLabel("Announcement date").fill("2026-01-01");
+  await form
+    .getByLabel("Announcement text")
+    .fill("Fictional company announcement created through the UI.");
+  await form
+    .getByLabel("Source reference", { exact: true })
+    .fill("FICTIONAL-UI-ANNOUNCEMENT");
+  await form.getByLabel("Audit reason").fill("Fictional browser review");
+  await form.getByRole("button", { name: "Save announcement draft" }).click();
+  const record = page
+    .locator(".announcement")
+    .filter({ has: page.getByRole("heading", { name: title, exact: true }) });
+  await expect(record).toContainText("Draft");
+  await page
+    .getByLabel("Reason for publishing or withdrawing a record")
+    .fill("Fictional publication source verified");
+  await record.getByRole("button", { name: "Publish", exact: true }).click();
+  await expect(record).toContainText("Published");
+  await page
+    .getByText("Add indicative valuation snapshot", { exact: true })
+    .click();
+  const valueForm = page.locator('[data-report-form="valuations"]');
+  const reference = "FICTIONAL-UI-VALUATION-" + test.info().project.name;
+  await valueForm
+    .getByRole("combobox", { name: "Share class", exact: true })
+    .selectOption(fixture().reportClass);
+  await valueForm
+    .getByLabel("Valuation as-of date")
+    .fill(test.info().project.name === "desktop" ? "2026-01-04" : "2026-01-05");
+  await valueForm.getByLabel("Indicative price per share").fill("3.5");
+  await valueForm
+    .getByLabel("Methodology and limitations")
+    .fill("FICTIONAL source book value with explanatory limitations.");
+  await valueForm
+    .getByLabel("Source reference", { exact: true })
+    .fill(reference);
+  await valueForm.getByLabel("Audit reason").fill("Fictional browser review");
+  await valueForm.getByRole("button", { name: "Save valuation draft" }).click();
+  const valuation = page.locator("tr").filter({ hasText: reference });
+  await expect(valuation).toContainText("Draft");
+  await page
+    .getByLabel("Reason for publishing or withdrawing a record")
+    .fill("Fictional valuation source verified");
+  await valuation.getByRole("button", { name: "Publish", exact: true }).click();
+  await expect(valuation).toContainText("Published");
+  await page
+    .getByLabel("Reason for publishing or withdrawing a record")
+    .fill("Fictional correction source superseded");
+  await valuation
+    .getByRole("button", { name: "Withdraw", exact: true })
+    .click();
+  await expect(valuation).toContainText("Withdrawn");
+  await page.getByText("Add dividend record", { exact: true }).click();
+  const dividendForm = page.locator('[data-report-form="dividend-records"]');
+  const paymentReference = "FICTIONAL-UI-PAYMENT-" + test.info().project.name;
+  await dividendForm
+    .getByRole("combobox", { name: "Record type", exact: true })
+    .selectOption("PAID");
+  await dividendForm
+    .getByRole("combobox", { name: "Published declaration", exact: true })
+    .selectOption(fixture().reportDeclaration);
+  await dividendForm.getByLabel("Source-record amount").fill("1.01");
+  await dividendForm
+    .getByLabel("Declaration or payment date")
+    .fill("2026-01-02");
+  await dividendForm
+    .getByLabel("Declaration or payment reference")
+    .fill(paymentReference);
+  await dividendForm
+    .getByLabel("Audit reason")
+    .fill("Fictional payment record evidence");
+  await dividendForm
+    .getByRole("button", { name: "Save dividend draft" })
+    .click();
+  const paymentRow = page.locator("tr").filter({ hasText: paymentReference });
+  await expect(paymentRow).toContainText("Draft");
+  await page
+    .getByLabel("Reason for publishing or withdrawing a record")
+    .fill("Fictional payment reference verified");
+  await paymentRow
+    .getByRole("button", { name: "Publish", exact: true })
+    .click();
+  await expect(paymentRow).toContainText("Published");
+  await expect(paymentRow).toContainText("PAID");
+  await page
+    .getByLabel("Reason for publishing or withdrawing a record")
+    .fill("Fictional payment correction test");
+  await paymentRow
+    .getByRole("button", { name: "Withdraw", exact: true })
+    .click();
+  await expect(paymentRow).toContainText("Withdrawn");
+});

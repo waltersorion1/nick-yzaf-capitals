@@ -1,6 +1,6 @@
-# NyCap â€” Days 1-3 shareholder portal
+# NyCap â€” Days 1-4 shareholder portal
 
-Express + strict TypeScript API, PostgreSQL + Prisma, and a same-origin Vanilla JS ES module shell. This repository implements **Days 1, 2 and 3** of `Codex_Playbook.md`, read in full. Day 2 adds protected company/class/profile CRUD, verified openings, immutable corrections and account-isolated holding reads. Day 3 provides the responsive shareholder portal and a read-only administrator overview. Admin editing screens, valuations, trading and payments are not implemented.
+Express + strict TypeScript API, PostgreSQL + Prisma, and a same-origin Vanilla JS ES module shell. This repository implements **Days 1, 2, 3 and 4** of `Codex_Playbook.md`, read in full. Day 2 adds protected company/class/profile CRUD, verified openings, immutable corrections and account-isolated holding reads. Day 3 provides the responsive shareholder portal and a read-only administrator overview. Day 4 adds announcements, indicative valuations and historical dividend records. Core admin editing screens remain Day 5; trading and payment execution are excluded.
 
 ## Windows / VS Code setup
 
@@ -66,7 +66,7 @@ npm run build
 npm start
 ```
 
-Expected: generated Prisma Client; the Day 1 and Day 2 migrations applied; a fictional-seed confirmation; successful TypeScript compilation; `NyCap listening on 3000`. Open **http://localhost:3000**. For live development use `npm run dev` instead of `npm start`.
+Expected: generated Prisma Client; the committed migrations applied; a fictional-seed confirmation; successful TypeScript compilation; `NyCap listening on 3000`. Open **http://localhost:3000**. For live development use `npm run dev` instead of `npm start`.
 
 Demo emails: `admin@example.test` and `shareholder@example.test`; both use your explicitly chosen `SEED_ADMIN_PASSWORD`. Every company and person is fictional. Never use this seed for a live register. Rerunning it does not overwrite existing users or holdings; it appends a seed audit entry. There is no default/hardcoded password and no automatic public admin bootstrap. Production rejects this development seed.
 
@@ -147,7 +147,7 @@ Migrate the separate test DB using the earlier test instructions before `npm tes
 
 ## Day 3: visible portal, themes and PWA
 
-Restart `npm run dev` if needed, then open **http://localhost:3000** and refresh. Existing sessions are recognized. Shareholders see Overview, My holdings, Companies and accessible company details. Administrators see Overview, Register holdings and Companies with actual read-only register data; editing screens remain Day 5. No public registration, trading or payment controls are present. Valuations currently show **Not available** because no publication API exists until Day 4. No migration or real-data seed is required for Day 3.
+Restart `npm run dev` if needed, then open **http://localhost:3000** and refresh. Existing sessions are recognized. Shareholders see Overview, My holdings, Companies and accessible company details. Administrators see Overview, Register holdings and Companies with actual read-only register data; editing screens remain Day 5. No public registration, trading or payment controls are present. Portfolio values show **Not available** unless every relevant position has a published valuation in one currency. Day 4 company pages now include published valuation history and source notes. No migration or real-data seed is required for Day 3.
 
 Use the top-bar **Light mode / Dark mode** button. Initial theme follows system preference; a manual choice lasts for the current page lifetime. Themes and records are not saved in localStorage, sessionStorage or IndexedDB. On narrow screens, navigation moves above the content and wide tables scroll within their panel.
 
@@ -170,3 +170,21 @@ npm run test:e2e
 ```
 
 Playwright starts a separate localhost:3103 test server, uses real PostgreSQL/session/API calls, and runs desktop Chromium plus Pixel 7 emulation. Its worker-version endpoint exists only in `tests/e2e/server.ts`; it is never mounted by the production server. It exercises real waiting-worker activation without changing production files. Browser reports/screenshots are ignored by Git and contain fictional fixtures only. Physical device and OS installation behavior is not established by emulation.
+
+## Day 4 publishing and reporting
+
+[Reporting API/workflow](docs/DAY4_API.md) and [Day 4 validation report](docs/DAY4_REPORT.md) describe the new features. Restart the dev server after updating the schema/client:
+
+```powershell
+npm ci
+npm run db:generate
+npm run db:migrate
+npm run build
+npm run dev
+```
+
+Open **Companies -> a company**. Admins can expand **Add company announcement**, **Add indicative valuation snapshot** or **Add dividend record**, save a draft, then enter an audit reason and choose **Publish**. Published reporting appears for authorized shareholders. Use **Withdraw** for an incorrect source; records/audits are retained. Valuations require methodology, date, class, currency and source reference. PAID dividend records require a published declaration and inherit its shareholder/class/currency; recording them never initiates a payment. Core register editing/CSV UI remains Day 5.
+
+Company pages show announcements, Chart.js history with **not a live market quote** labeling, exact source values and declared/paid dividend records. Missing values stay **Not available**. Mixed currencies are kept separate; partial valuations are not shown as a complete portfolio. Historical dividend sums do not imply a wallet, withdrawable amount or settlement execution.
+
+Day 4 adds migration `202611210003_day4`; it creates reporting tables/indexes/guards without changing existing share quantities. There is no automatic reporting seed in your normal database. Tests create fictional reporting fixtures only in a separate disposable DB. Apply the migration to that test DB before `npm test` / `npm run test:e2e` using the earlier test setup. Chart.js 4.6.1 is pinned and copied locally by `npm run assets` / postinstall; no CDN is used. Worker/public asset names are v3 so already-installed v2 pages can update safely. Refresh and accept **Update and reload** when offered.
