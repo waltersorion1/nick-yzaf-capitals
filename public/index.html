@@ -1,76 +1,68 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" data-bs-theme="dark">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width,initial-scale=1" />
     <meta name="theme-color" content="#0D1424" />
-    <title>NyCap · Private pilot</title>
+    <title>NyCap | Shareholder portal</title>
     <link rel="manifest" href="/manifest.webmanifest" />
     <link rel="apple-touch-icon" href="/icons/icon-192.png" />
     <link rel="stylesheet" href="/assets/bootstrap-5.3.9.min.css" />
-    <link rel="stylesheet" href="/assets/shell-v1.css" />
-    <script type="module" src="/assets/app-v1.js"></script>
+    <link rel="stylesheet" href="/assets/portal-v2.css" />
+    <script type="module" src="/assets/portal-v2.js"></script>
   </head>
   <body>
-    <main>
-      <header>
-        <span>NYCAP</span>
-        <p>Private shareholder pilot · Day 1 foundation</p>
-      </header>
-      <p id="connection" role="status"></p>
-      <h1>Secure access</h1>
-      <p>
-        Access is created or invited by an administrator. No public
-        registration.
-      </p>
-      <form id="login">
-        <label
-          >Email<input
-            name="email"
-            type="email"
-            autocomplete="username"
-            required /></label
-        ><label
-          >Password<input
-            name="password"
-            type="password"
-            autocomplete="current-password"
-            required
-            maxlength="128" /></label
-        ><button>Sign in</button>
-      </form>
-      <section id="account" hidden>
-        <h2>Signed in</h2>
-        <p id="identity"></p>
-        <p>Portfolio screens will be added in a later phase.</p>
-        <button id="logout">Sign out</button>
-      </section>
-      <details>
-        <summary>Accept an invitation</summary>
-        <form id="invite">
-          <label
-            >Invitation token<input
-              name="token"
-              required
-              autocomplete="off"
-              pattern="[a-f0-9]{64}" /></label
-          ><label
-            >New password (12–128 characters)<input
-              name="password"
-              type="password"
-              autocomplete="new-password"
-              minlength="12"
-              maxlength="128"
-              required /></label
-          ><button>Activate account</button>
-        </form>
-      </details>
-      <p id="message" role="status" aria-live="polite"></p>
-      <button id="update" hidden>Update app and reload</button>
-      <footer>
-        Offline mode cannot display or modify private holdings. Installation
-        options vary by browser.
-      </footer>
-    </main>
+    <a class="skip" href="#content">Skip to content</a>
+    <div id="app">
+      <aside id="sidebar">
+        <a class="brand" href="#overview"
+          ><span class="brand-mark">N</span>NYCAP<span class="pilot"
+            >PRIVATE PILOT</span
+          ></a
+        >
+        <p class="nav-caption">YOUR REGISTER</p>
+        <nav aria-label="Main navigation" id="navigation"></nav>
+        <div class="sidebar-bottom">
+          <span class="secure-dot"></span> Private access<br /><small
+            >Verified ownership. Clear records.</small
+          >
+        </div>
+      </aside>
+      <div class="workspace">
+        <header class="topbar">
+          <span id="location">Shareholder portal</span>
+          <div class="actions">
+            <span id="connection" role="status">Online</span
+            ><button id="theme" class="quiet" aria-label="Switch to light mode">
+              Light mode</button
+            ><button id="install" hidden>Install app</button
+            ><button id="logout" class="quiet" hidden>Sign out</button>
+          </div>
+        </header>
+        <div id="update-notice" class="notice" hidden>
+          A new version is ready. Save your work before reloading.
+          <button id="update">Update and reload</button>
+        </div>
+        <main id="content" tabindex="-1"></main>
+        <footer>
+          Private shareholder register
+          <span>Offline mode cannot display or modify private holdings.</span>
+          <details>
+            <summary>Install on your device</summary>
+            <p>
+              Use your browser's Install option when offered. On iOS Safari,
+              choose Share, then Add to Home Screen. Availability varies by
+              browser. Private records always require a connection.
+            </p>
+          </details>
+        </footer>
+      </div>
+    </div>
+    <div
+      id="announcement"
+      role="status"
+      aria-live="polite"
+      class="sr-only"
+    ></div>
   </body>
 </html>

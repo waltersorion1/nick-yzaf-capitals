@@ -1,6 +1,6 @@
-# NyCap â€” Days 1-2 foundation
+# NyCap â€” Days 1-3 shareholder portal
 
-Express + strict TypeScript API, PostgreSQL + Prisma, and a same-origin Vanilla JS ES module shell. This repository implements **Days 1 and 2** of `Codex_Playbook.md`, read in full. Day 2 adds protected company/class/profile CRUD, verified openings, immutable corrections and account-isolated holding reads. Portfolio/admin screens, valuations, trading and payments remain outside the implemented scope.
+Express + strict TypeScript API, PostgreSQL + Prisma, and a same-origin Vanilla JS ES module shell. This repository implements **Days 1, 2 and 3** of `Codex_Playbook.md`, read in full. Day 2 adds protected company/class/profile CRUD, verified openings, immutable corrections and account-isolated holding reads. Day 3 provides the responsive shareholder portal and a read-only administrator overview. Admin editing screens, valuations, trading and payments are not implemented.
 
 ## Windows / VS Code setup
 
@@ -144,3 +144,29 @@ npm run dev
 The new migration adds the ledger, verification/evidence fields and audit metadata, without dropping tables or changing existing quantities. **Day 1 balances become unverified legacy baselines**, hidden from shareholder reads until verified against source evidence using the API workflow. Existing profile dates need a source reference as well. If previous holdings exceed a class total, migration stops and rolls back; reconcile source records before retrying. Back up any database containing real records before migrations.
 
 Migrate the separate test DB using the earlier test instructions before `npm test`. Tests retain fictional register records and immutable events: use a disposable DB only. The optional seed now records openings through the ledger and verifies only its explicitly fictional fixtures. It commits demo metadata first and missing openings separately, so an interrupted development seed can be rerun. It preserves existing passwords and quantities and never resets the database. Do not seed real records.
+
+## Day 3: visible portal, themes and PWA
+
+Restart `npm run dev` if needed, then open **http://localhost:3000** and refresh. Existing sessions are recognized. Shareholders see Overview, My holdings, Companies and accessible company details. Administrators see Overview, Register holdings and Companies with actual read-only register data; editing screens remain Day 5. No public registration, trading or payment controls are present. Valuations currently show **Not available** because no publication API exists until Day 4. No migration or real-data seed is required for Day 3.
+
+Use the top-bar **Light mode / Dark mode** button. Initial theme follows system preference; a manual choice lasts for the current page lifetime. Themes and records are not saved in localStorage, sessionStorage or IndexedDB. On narrow screens, navigation moves above the content and wide tables scroll within their panel.
+
+Private data is held only in page memory. Going offline removes it immediately; reloading offline shows a generic branded fallback. Reconnecting checks the session again. Signing out destroys the server session and clears page data; other open tabs receive a transient sign-out notification. Only allowlisted static assets and the generic offline page are cached. API responses and navigation remain network-only/no-store. User-controlled update activation preserves an in-progress form until **Update and reload** is chosen; that action clears form fields before reloading. Versioned asset filenames and the worker cache version must both change in future releases when cached assets change.
+
+Install uses the browser's native prompt when supported. Otherwise use its Install menu; on iOS Safari use Share -> Add to Home Screen where available. HTTPS is required outside localhost. Android/iOS hardware and actual OS installation remain manual checks; see [Day 3 report and device checklist](docs/DAY3_REPORT.md).
+
+### Run browser tests
+
+Use the **dedicated, migrated test database** from the earlier test setup, not the normal database. Replace password placeholders with your own URL-encoded password; never paste them literally. The browser setup inserts fictional users/companies/holdings and retains their immutable audit history in that test DB. It does not import real records or use your normal database.
+
+```powershell
+npm ci
+npm run db:generate
+npx playwright install chromium
+# Set TEST_DATABASE_URL to your dedicated nycap_test connection, as described above.
+npm run build
+npm test
+npm run test:e2e
+```
+
+Playwright starts a separate localhost:3103 test server, uses real PostgreSQL/session/API calls, and runs desktop Chromium plus Pixel 7 emulation. Its worker-version endpoint exists only in `tests/e2e/server.ts`; it is never mounted by the production server. It exercises real waiting-worker activation without changing production files. Browser reports/screenshots are ignored by Git and contain fictional fixtures only. Physical device and OS installation behavior is not established by emulation.
