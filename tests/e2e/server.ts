@@ -28,7 +28,7 @@ wrapper.get("/sw.js", (_req, res) => {
     .set("Cache-Control", "no-store")
     .send(
       readFileSync("public/sw.js", "utf8").replace(
-        "nycap-public-v3",
+        "nycap-public-v4",
         "nycap-public-e2e-" + revision,
       ),
     );

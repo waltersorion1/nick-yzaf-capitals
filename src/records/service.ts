@@ -209,42 +209,50 @@ export class RecordService {
     return cls;
   }
   async open(context: AuditContext, input: z.infer<typeof schema.opening>) {
-    return this.db.$transaction(async (tx) => {
-      const cls = await this.lockRegister(
-        tx,
-        input.shareClassId,
-        input.shareholderId,
-      );
-      const total = await tx.shareholding.aggregate({
-        where: { shareClassId: cls.id },
-        _sum: { quantity: true },
-      });
-      if ((total._sum.quantity ?? 0n) + input.quantity > cls.issuedShares)
-        throw new RecordError(409, "Opening exceeds the recorded class total");
-      const holding = await tx.shareholding.create({
-        data: {
-          shareholderId: input.shareholderId,
-          shareClassId: input.shareClassId,
-          quantity: 0n,
-        },
-      });
-      await tx.holdingEvent.create({
-        data: {
-          ...context,
-          holdingId: holding.id,
-          sequence: 1,
-          kind: "OPENING",
-          beforeQuantity: 0n,
-          delta: input.quantity,
-          afterQuantity: input.quantity,
-          reason: input.reason,
-          sourceReference: input.sourceReference,
-          verifiedAt: input.verifiedAt,
-          effectiveAt: input.effectiveAt,
-        },
-      });
-      return tx.shareholding.findUniqueOrThrow({ where: { id: holding.id } });
+    return this.db.$transaction((tx) =>
+      this.openInTransaction(tx, context, input),
+    );
+  }
+  // CSV imports pass their existing transaction; never nest independent commits.
+  async openInTransaction(
+    tx: Prisma.TransactionClient,
+    context: AuditContext,
+    input: z.infer<typeof schema.opening>,
+  ) {
+    const cls = await this.lockRegister(
+      tx,
+      input.shareClassId,
+      input.shareholderId,
+    );
+    const total = await tx.shareholding.aggregate({
+      where: { shareClassId: cls.id },
+      _sum: { quantity: true },
     });
+    if ((total._sum.quantity ?? 0n) + input.quantity > cls.issuedShares)
+      throw new RecordError(409, "Opening exceeds the recorded class total");
+    const holding = await tx.shareholding.create({
+      data: {
+        shareholderId: input.shareholderId,
+        shareClassId: input.shareClassId,
+        quantity: 0n,
+      },
+    });
+    await tx.holdingEvent.create({
+      data: {
+        ...context,
+        holdingId: holding.id,
+        sequence: 1,
+        kind: "OPENING",
+        beforeQuantity: 0n,
+        delta: input.quantity,
+        afterQuantity: input.quantity,
+        reason: input.reason,
+        sourceReference: input.sourceReference,
+        verifiedAt: input.verifiedAt,
+        effectiveAt: input.effectiveAt,
+      },
+    });
+    return tx.shareholding.findUniqueOrThrow({ where: { id: holding.id } });
   }
   async adjust(
     context: AuditContext,

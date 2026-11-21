@@ -1,6 +1,6 @@
-# NyCap â€” Days 1-4 shareholder portal
+# NyCap â€” Days 1-5 shareholder portal
 
-Express + strict TypeScript API, PostgreSQL + Prisma, and a same-origin Vanilla JS ES module shell. This repository implements **Days 1, 2, 3 and 4** of `Codex_Playbook.md`, read in full. Day 2 adds protected company/class/profile CRUD, verified openings, immutable corrections and account-isolated holding reads. Day 3 provides the responsive shareholder portal and a read-only administrator overview. Day 4 adds announcements, indicative valuations and historical dividend records. Core admin editing screens remain Day 5; trading and payment execution are excluded.
+Express + strict TypeScript API, PostgreSQL + Prisma, and a same-origin Vanilla JS ES module shell. This repository implements **Days 1, 2, 3, 4 and 5** of `Codex_Playbook.md`, read in full. Day 2 adds protected company/class/profile CRUD, verified openings, immutable corrections and account-isolated holding reads. Day 3 provides the responsive shareholder portal and a read-only administrator overview. Day 4 adds announcements, indicative valuations and historical dividend records. Day 5 adds the admin workspace and reviewed CSV opening imports; trading and payment execution are excluded.
 
 ## Windows / VS Code setup
 
@@ -147,7 +147,7 @@ Migrate the separate test DB using the earlier test instructions before `npm tes
 
 ## Day 3: visible portal, themes and PWA
 
-Restart `npm run dev` if needed, then open **http://localhost:3000** and refresh. Existing sessions are recognized. Shareholders see Overview, My holdings, Companies and accessible company details. Administrators see Overview, Register holdings and Companies with actual read-only register data; editing screens remain Day 5. No public registration, trading or payment controls are present. Portfolio values show **Not available** unless every relevant position has a published valuation in one currency. Day 4 company pages now include published valuation history and source notes. No migration or real-data seed is required for Day 3.
+Restart `npm run dev` if needed, then open **http://localhost:3000** and refresh. Existing sessions are recognized. Shareholders see Overview, My holdings, Companies and accessible company details. Administrators see Overview, Register holdings and Companies with actual read-only register data; editing is available in Day 5's Admin workspace. No public registration, trading or payment controls are present. Portfolio values show **Not available** unless every relevant position has a published valuation in one currency. Day 4 company pages now include published valuation history and source notes. No migration or real-data seed is required for Day 3.
 
 Use the top-bar **Light mode / Dark mode** button. Initial theme follows system preference; a manual choice lasts for the current page lifetime. Themes and records are not saved in localStorage, sessionStorage or IndexedDB. On narrow screens, navigation moves above the content and wide tables scroll within their panel.
 
@@ -183,8 +183,20 @@ npm run build
 npm run dev
 ```
 
-Open **Companies -> a company**. Admins can expand **Add company announcement**, **Add indicative valuation snapshot** or **Add dividend record**, save a draft, then enter an audit reason and choose **Publish**. Published reporting appears for authorized shareholders. Use **Withdraw** for an incorrect source; records/audits are retained. Valuations require methodology, date, class, currency and source reference. PAID dividend records require a published declaration and inherit its shareholder/class/currency; recording them never initiates a payment. Core register editing/CSV UI remains Day 5.
+Open **Companies -> a company**. Admins can expand **Add company announcement**, **Add indicative valuation snapshot** or **Add dividend record**, save a draft, then enter an audit reason and choose **Publish**. Published reporting appears for authorized shareholders. Use **Withdraw** for an incorrect source; records/audits are retained. Valuations require methodology, date, class, currency and source reference. PAID dividend records require a published declaration and inherit its shareholder/class/currency; recording them never initiates a payment. Core register editing and CSV imports are now in Admin workspace.
 
 Company pages show announcements, Chart.js history with **not a live market quote** labeling, exact source values and declared/paid dividend records. Missing values stay **Not available**. Mixed currencies are kept separate; partial valuations are not shown as a complete portfolio. Historical dividend sums do not imply a wallet, withdrawable amount or settlement execution.
 
 Day 4 adds migration `202611210003_day4`; it creates reporting tables/indexes/guards without changing existing share quantities. There is no automatic reporting seed in your normal database. Tests create fictional reporting fixtures only in a separate disposable DB. Apply the migration to that test DB before `npm test` / `npm run test:e2e` using the earlier test setup. Chart.js 4.6.1 is pinned and copied locally by `npm run assets` / postinstall; no CDN is used. Worker/public asset names are v3 so already-installed v2 pages can update safely. Refresh and accept **Update and reload** when offered.
+
+## Day 5 admin workspace and CSV migration
+
+After restart/refresh at localhost:3000, administrators have an **Admin workspace** navigation item. It includes company/class creation, editing and safe deletion of unused records; shareholder invitations, verified profiles; manual verified openings, immutable corrections and legacy verification/history; class reconciliation; and reviewed CSV imports. The Reporting section opens each company's existing announcement, valuation and dividend source editors. Shareholders do not get this workspace or its APIs.
+
+Run `npm ci`, `npm run db:generate`, `npm run db:migrate` and restart `npm run dev` after pulling. Migration `202611210004_day5` is additive and does not modify existing quantities. Accept **Update and reload** when offered for worker/public assets v4. No normal-database seed or automatic CSV upload is performed.
+
+Read [CSV_IMPORT.md](docs/CSV_IMPORT.md) **before importing source records**. Download the header-only template in the import screen; use its private identifier/mapping panel. CSV preview displays row errors and exact class totals without changing holdings. Commit revalidates the stored preview and writes the entire file/ledger/audits/receipt atomically, or writes none of its holdings. Existing or duplicate holdings are rejected, not overwritten or silently skipped. Repeated same-file commits/uploads return receipts instead of duplicate events.
+
+Fictional CSV examples live in `docs/examples/fictional-openings.csv`; their IDs are intentionally not real and cannot be used as production input. Tests use fictional data in a separate disposable database. Migrate that test database before `npm test` / `npm run test:e2e`. Browser tests reuse real login cookies only in worker memory to stay within the unchanged production login rate limit; they do not bypass server authentication.
+
+See [Day 5 report](docs/DAY5_REPORT.md) for actual commands/results, known limits and next dependencies. Imported source files, reports and receipts are private server-side audit evidence; row-error downloads are explicit private JSON documents, not browser cache storage. Invites show their one-time token in the current view only: copy/deliver it privately before refreshing or saving another change. All UI dates marked local are converted to UTC; CSV verification/effective timestamps require an explicit timezone.

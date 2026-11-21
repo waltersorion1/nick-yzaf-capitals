@@ -173,7 +173,47 @@ export default async function setup() {
       "publish",
       reason,
     );
+    const csvFixtures: Record<
+      string,
+      {
+        editorClassId: string;
+        classId: string;
+        companyId: string;
+        profileId: string;
+        name: string;
+      }
+    > = {};
+    for (const project of ["desktop", "mobile"]) {
+      const user = await db.user.create({
+        data: { email: `e2e-csv-${project}-${suffix}@example.test` },
+      });
+      const profile = await service.createProfile(context, {
+        userId: user.id,
+        legalName: `FICTIONAL CSV ${project} ${suffix}`,
+        ...verification,
+      });
+      const cls = await service.createClass(context, {
+        companyId: company.id,
+        name: `CSV ${project} ${suffix}`,
+        issuedShares: 1000n,
+        reason,
+      });
+      const editorClass = await service.createClass(context, {
+        companyId: company.id,
+        name: `Manual editor ${project} ${suffix}`,
+        issuedShares: 1000n,
+        reason,
+      });
+      csvFixtures[project] = {
+        editorClassId: editorClass.id,
+        classId: cls.id,
+        companyId: company.id,
+        profileId: profile.id,
+        name: profile.legalName,
+      };
+    }
     process.env.E2E_FIXTURE = JSON.stringify({
+      csvFixtures,
       reportDeclaration: declaration.id,
       reporter: reporter.email,
       reportCompany: reportCompany.name,

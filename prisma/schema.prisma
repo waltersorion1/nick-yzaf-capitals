@@ -35,17 +35,18 @@ model ShareClass {
 }
 
 model User {
-  id              String         @id @default(uuid()) @db.Uuid
-  email           String         @unique
+  id              String               @id @default(uuid()) @db.Uuid
+  email           String               @unique
   passwordHash    String?
-  role            Role           @default(SHAREHOLDER)
-  active          Boolean        @default(true)
-  inviteHash      String?        @unique
+  role            Role                 @default(SHAREHOLDER)
+  active          Boolean              @default(true)
+  inviteHash      String?              @unique
   inviteExpiresAt DateTime?
-  createdAt       DateTime       @default(now())
+  createdAt       DateTime             @default(now())
   shareholder     Shareholder?
   auditLogs       AuditLog[]
   holdingEvents   HoldingEvent[]
+  openingImports  OpeningImportBatch[]
 
   @@map("users")
 }
@@ -184,4 +185,23 @@ model DividendRecord {
   @@unique([shareholderId, shareClassId, reference])
   @@index([shareholderId, datedAt])
   @@map("dividend_records")
+}
+
+model OpeningImportBatch {
+  id              String    @id @default(uuid()) @db.Uuid
+  actorId         String    @db.Uuid
+  actor           User      @relation(fields: [actorId], references: [id], onDelete: Restrict)
+  contentHash     String    @db.VarChar(64)
+  csvText         String
+  reason          String
+  preview         Json
+  previewDigest   String    @db.VarChar(64)
+  createdAt       DateTime  @default(now())
+  expiresAt       DateTime
+  committedAt     DateTime?
+  commitRequestId String?   @db.Uuid
+  receipt         Json?
+
+  @@index([actorId, createdAt])
+  @@map("opening_import_batches")
 }

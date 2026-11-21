@@ -1,16 +1,17 @@
 // Public allowlist only. Never cache the root document, API, or authenticated responses.
-const CACHE = "nycap-public-v3";
+const CACHE = "nycap-public-v4";
 const PUBLIC = [
   "/offline.html",
-  "/assets/reporting-v3.js",
+  "/assets/admin-v4.js",
+  "/assets/reporting-v4.js",
   "/assets/chart-4.6.1.umd.min.js",
   "/assets/bootstrap-5.3.9.min.css",
-  "/assets/portal-v3.css",
-  "/assets/shell-v3.css",
-  "/assets/api-v3.js",
-  "/assets/views-v3.js",
-  "/assets/pwa-v3.js",
-  "/assets/portal-v3.js",
+  "/assets/portal-v4.css",
+  "/assets/shell-v4.css",
+  "/assets/api-v4.js",
+  "/assets/views-v4.js",
+  "/assets/pwa-v4.js",
+  "/assets/portal-v4.js",
 
   "/icons/icon-192.png",
   "/icons/icon-512.png",

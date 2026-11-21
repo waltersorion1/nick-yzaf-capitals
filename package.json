@@ -24,6 +24,7 @@
     "bootstrap": "5.3.9",
     "chart.js": "4.6.1",
     "connect-pg-simple": "10.0.0",
+    "csv-parse": "7.0.3",
     "dotenv": "17.2.3",
     "express": "5.1.0",
     "express-rate-limit": "8.7.5",

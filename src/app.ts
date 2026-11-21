@@ -10,6 +10,7 @@ import { resolve } from "node:path";
 import { PrismaClient, Role } from "@prisma/client";
 import { z, ZodError } from "zod";
 import { hashPassword, verifyPassword, tokenHash } from "./password.js";
+import { importRoutes } from "./imports/routes.js";
 import { reportingRoutes } from "./reporting/routes.js";
 import { recordRoutes } from "./records/routes.js";
 import { RecordError } from "./records/common.js";
@@ -48,6 +49,7 @@ export function createApp({
     res.set("Cache-Control", "no-store");
     next();
   });
+  app.use("/api/admin/imports/preview", express.json({ limit: "256kb" }));
   app.use(express.json({ limit: "16kb" }));
   app.use(
     session({
@@ -234,6 +236,7 @@ export function createApp({
     }
     res.sendStatus(204);
   });
+  app.use("/api", importRoutes(db, auth, admin));
   app.use("/api", reportingRoutes(db, auth, admin));
   app.use("/api", recordRoutes(db, auth, admin));
   app.use("/api", (_req, res) => {

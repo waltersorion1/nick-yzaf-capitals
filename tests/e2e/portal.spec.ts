@@ -1,15 +1,32 @@
 import { test, expect, type Page } from "@playwright/test";
 const fixture = () => JSON.parse(process.env.E2E_FIXTURE!);
+// Reuse only real server session cookies in worker memory. Do not weaken the production rate limit.
+interface SessionCookie {
+  name: string;
+  value: string;
+  domain: string;
+  path: string;
+  expires: number;
+  httpOnly: boolean;
+  secure: boolean;
+  sameSite: "Strict" | "Lax" | "None";
+}
+const sessions = new Map<string, SessionCookie[]>();
 async function login(page: Page, role = "member") {
+  const expected = page.getByRole("heading", {
+    name: role === "admin" ? "Register overview" : "Ownership at a glance",
+  });
+  if (sessions.has(role)) await page.context().addCookies(sessions.get(role)!);
   await page.goto("/");
+  await expect(
+    expected.or(page.getByRole("heading", { name: "Sign in to NyCap" })),
+  ).toBeVisible();
+  if (await expected.isVisible()) return;
   await page.getByLabel("Email address").fill(fixture()[role]);
   await page.getByLabel("Password", { exact: true }).fill(fixture().password);
   await page.getByRole("button", { name: "Sign in securely" }).click();
-  await expect(
-    page.getByRole("heading", {
-      name: role === "admin" ? "Register overview" : "Ownership at a glance",
-    }),
-  ).toBeVisible();
+  await expect(expected).toBeVisible();
+  sessions.set(role, await page.context().cookies());
 }
 async function ready(page: Page) {
   await page.evaluate(async () => {
@@ -459,4 +476,352 @@ test("administrator saves, publishes and withdraws source records through the co
     .getByRole("button", { name: "Withdraw", exact: true })
     .click();
   await expect(paymentRow).toContainText("Withdrawn");
+});
+
+test("admin workspace maintains companies, classes, invited profiles and audited holdings", async ({
+  page,
+}) => {
+  await login(page, "admin");
+  await page
+    .getByRole("navigation")
+    .getByRole("link", { name: "Admin workspace", exact: false })
+    .click();
+  await expect(
+    page.getByRole("heading", { name: "Maintain the source register" }),
+  ).toBeVisible();
+  const name =
+      "FICTIONAL UI company " +
+      test.info().project.name +
+      " " +
+      fixture().companyId.slice(0, 8),
+    form = page.locator("#company-editor");
+  await form.getByLabel("Company name").fill(name);
+  await form.getByLabel("Audit reason").fill("Fictional register creation");
+  await form.getByRole("button", { name: "Save company", exact: true }).click();
+  const row = page
+    .locator("tr")
+    .filter({ has: page.getByRole("link", { name, exact: true }) });
+  await expect(row).toBeVisible();
+  await row.getByRole("button", { name: "Edit company", exact: true }).click();
+  await form.getByLabel("Company name").fill(name + " corrected");
+  await form.getByLabel("Audit reason").fill("Fictional name correction");
+  await form.getByRole("button", { name: "Save company", exact: true }).click();
+  const updated = page.locator("tr").filter({
+    has: page.getByRole("link", { name: name + " corrected", exact: true }),
+  });
+  await expect(updated).toBeVisible();
+  const classForm = page.locator("#class-editor");
+  await classForm
+    .getByRole("combobox", { name: "Company", exact: true })
+    .selectOption({ label: name + " corrected" });
+  await classForm.getByLabel("Share-class name").fill("Fictional unused class");
+  await classForm.getByLabel("Registered issued shares").fill("1000");
+  await classForm.getByLabel("Audit reason").fill("Fictional class source");
+  await classForm
+    .getByRole("button", { name: "Save share class", exact: true })
+    .click();
+  const classRow = page
+    .locator("tr")
+    .filter({ hasText: name + " corrected / Fictional unused class" });
+  await expect(classRow).toBeVisible();
+  await classRow
+    .getByRole("button", { name: "Edit class", exact: true })
+    .click();
+  await classForm
+    .getByLabel("Share-class name")
+    .fill("Fictional corrected class");
+  await classForm
+    .getByLabel("Audit reason")
+    .fill("Fictional class name source");
+  await classForm
+    .getByRole("button", { name: "Save share class", exact: true })
+    .click();
+  const changedClass = page
+    .locator("tr")
+    .filter({ hasText: name + " corrected / Fictional corrected class" });
+  await expect(changedClass).toBeVisible();
+  await changedClass
+    .getByRole("button", { name: "Edit class", exact: true })
+    .click();
+  await classForm
+    .getByLabel("Audit reason")
+    .fill("Fictional unused class removal");
+  await classForm
+    .getByRole("button", { name: "Delete unused share class", exact: true })
+    .click();
+  await expect(changedClass).toHaveCount(0);
+  await updated
+    .getByRole("button", { name: "Edit company", exact: true })
+    .click();
+  await form
+    .getByLabel("Audit reason")
+    .fill("Fictional unused company removal");
+  await form
+    .getByRole("button", { name: "Delete unused company", exact: true })
+    .click();
+  await expect(updated).toHaveCount(0);
+  await page.getByRole("button", { name: "Shareholders", exact: true }).click();
+  const email = `ui-invite-${test.info().project.name}-${fixture().companyId}@example.test`,
+    invite = page.locator("#invite-shareholder");
+  await invite.getByLabel("Shareholder email").fill(email);
+  await invite
+    .getByRole("button", { name: "Create invitation", exact: true })
+    .click();
+  await expect(
+    page.getByLabel("Invitation token (deliver privately)"),
+  ).toHaveValue(/^[a-f0-9]{64}$/);
+  const profile = page.locator("#profile-editor");
+  await profile
+    .getByRole("combobox", { name: "Shareholder account", exact: true })
+    .selectOption({ label: email });
+  await profile
+    .getByLabel("Legal name", { exact: true })
+    .fill("FICTIONAL UI invited person");
+  await profile
+    .getByRole("checkbox", { name: "Source verification checked" })
+    .check();
+  await profile
+    .getByLabel("Profile verification time (local)")
+    .fill("2026-01-01T00:00");
+  await profile
+    .getByLabel("Profile verification reference")
+    .fill("FICTIONAL-UI-LEGAL");
+  await profile
+    .getByLabel("Audit reason")
+    .fill("Fictional legal source checked");
+  await profile
+    .getByRole("button", { name: "Save shareholder profile", exact: true })
+    .click();
+  const profileRow = page.locator("tr").filter({ hasText: email });
+  await expect(profileRow).toContainText("Verified");
+  await profileRow
+    .getByRole("button", { name: "Edit profile", exact: true })
+    .click();
+  await profile
+    .getByLabel("Legal name", { exact: true })
+    .fill("FICTIONAL UI corrected person");
+  await profile
+    .getByLabel("Audit reason")
+    .fill("Fictional legal name corrected");
+  await profile
+    .getByRole("button", { name: "Save shareholder profile", exact: true })
+    .click();
+  await expect(profileRow).toContainText("FICTIONAL UI corrected person");
+  await profileRow
+    .getByRole("button", { name: "Edit profile", exact: true })
+    .click();
+  await profile
+    .getByLabel("Audit reason")
+    .fill("Fictional unused profile removal");
+  await profile
+    .getByRole("button", { name: "Delete unused profile", exact: true })
+    .click();
+  await expect(profileRow).toHaveCount(0);
+  await page
+    .getByRole("button", { name: "Holdings & history", exact: true })
+    .click();
+  const f = fixture().csvFixtures[test.info().project.name],
+    opening = page.locator("#opening-editor");
+  await opening
+    .getByRole("combobox", { name: "Shareholder", exact: true })
+    .selectOption(f.profileId);
+  await opening
+    .getByRole("combobox", { name: "Share class", exact: true })
+    .selectOption(f.editorClassId);
+  await opening.getByLabel("Opening shares").fill("10");
+  await opening
+    .getByLabel("Opening verification time (local)")
+    .fill("2026-01-01T00:00");
+  await opening
+    .getByLabel("Opening effective time (local)")
+    .fill("2026-01-01T00:00");
+  await opening
+    .getByLabel("Opening source reference")
+    .fill("FICTIONAL-MANUAL-OPENING");
+  await opening
+    .getByLabel("Audit reason")
+    .fill("Fictional opening source verified");
+  await opening
+    .getByRole("button", { name: "Record verified opening", exact: true })
+    .click();
+  await expect(page.locator("#admin-message")).toContainText(
+    "Opening recorded with an immutable event",
+  );
+  const response = await page.request.get(
+      "/api/admin/holdings?shareClassId=" + f.editorClassId,
+    ),
+    holding = (await response.json())[0];
+  await page
+    .getByRole("combobox", { name: "Holding", exact: true })
+    .selectOption(holding.id);
+  const correction = page.locator("#correction-editor");
+  await correction.getByLabel("Signed correction in shares").fill("1");
+  await correction
+    .getByLabel("Correction effective time (local)")
+    .fill("2026-01-01T00:00");
+  await correction
+    .getByLabel("Correction source reference")
+    .fill("FICTIONAL-UI-CORRECTION");
+  await correction
+    .getByLabel("Audit reason")
+    .fill("Fictional correction proof");
+  await correction
+    .getByRole("button", { name: "Append correction", exact: true })
+    .click();
+  await expect(page.locator("#admin-message")).toContainText(
+    "Holding event recorded and audited.",
+  );
+  await page
+    .getByRole("combobox", { name: "Holding", exact: true })
+    .selectOption(holding.id);
+  await page
+    .getByRole("button", { name: "View holding history", exact: true })
+    .click();
+  await expect(page.locator("#holding-history-result")).toContainText(
+    "ADJUSTMENT",
+  );
+  await page
+    .getByRole("button", { name: "Companies & classes", exact: true })
+    .click();
+  await page.locator(`[data-reconcile="${f.editorClassId}"]`).click();
+  await expect(page.locator("#class-reconciliation")).toContainText(
+    "Reconciled",
+  );
+  expect(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth <= innerWidth,
+    ),
+  ).toBe(true);
+  await page.evaluate(() => scrollTo(0, 0));
+  await page.screenshot({
+    path: `test-results/admin-viewport-${test.info().project.name}.png`,
+  });
+  await page.getByRole("button", { name: "Reporting", exact: true }).click();
+  await expect(
+    page.getByRole("heading", {
+      name: "Announcements, valuations and dividends",
+    }),
+  ).toBeVisible();
+});
+test("CSV preview blocks bad rows, commits reviewed rows once and retains a private receipt", async ({
+  page,
+  context,
+}) => {
+  await login(page, "admin");
+  await page.goto("/#admin");
+  await expect(
+    page.getByRole("heading", { name: "Maintain the source register" }),
+  ).toBeVisible();
+  await page.getByRole("button", { name: "CSV import", exact: true }).click();
+  const f = fixture().csvFixtures[test.info().project.name],
+    headers =
+      "company_id,share_class_id,shareholder_id,quantity,verified_at,effective_at,source_reference,class_issued_shares,expected_class_recorded_shares";
+  const text = (qty: string) =>
+    headers +
+    "\n" +
+    [
+      f.companyId,
+      f.classId,
+      f.profileId,
+      qty,
+      "2026-01-01T00:00:00Z",
+      "2026-01-01T00:00:00Z",
+      "FICTIONAL-CSV-UI",
+      1000,
+      100,
+    ].join(",") +
+    "\n";
+  const form = page.locator("#csv-preview");
+  await form.getByLabel("Opening CSV file").setInputFiles({
+    name: "fictional-invalid.csv",
+    mimeType: "text/csv",
+    buffer: Buffer.from(text("-1")),
+  });
+  await form.getByLabel("Audit reason").fill("Fictional CSV source review");
+  await form.getByRole("button", { name: "Preview CSV", exact: true }).click();
+  await expect(
+    page.getByRole("heading", { name: "Preview has errors" }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Commit reviewed import", exact: true }),
+  ).toHaveCount(0);
+  await form.getByLabel("Opening CSV file").setInputFiles({
+    name: "fictional-valid.csv",
+    mimeType: "text/csv",
+    buffer: Buffer.from(text("100")),
+  });
+  await form.getByRole("button", { name: "Preview CSV", exact: true }).click();
+  await expect(
+    page.getByRole("heading", { name: "Preview ready for review" }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Commit reviewed import", exact: true }),
+  ).toBeDisabled();
+  await page
+    .getByRole("checkbox", {
+      name: "I checked the source register and class reconciliation totals.",
+    })
+    .check();
+  await page
+    .getByRole("button", { name: "Commit reviewed import", exact: true })
+    .click();
+  await expect(
+    page.getByRole("heading", { name: "Import committed", exact: true }),
+  ).toBeVisible();
+  await expect(page.locator("#import-result")).toContainText(
+    "1 opening rows committed",
+  );
+  await page
+    .locator("#csv-preview")
+    .getByLabel("Opening CSV file")
+    .setInputFiles({
+      name: "fictional-valid.csv",
+      mimeType: "text/csv",
+      buffer: Buffer.from(text("100")),
+    });
+  await page
+    .locator("#csv-preview")
+    .getByLabel("Audit reason")
+    .fill("Fictional repeated upload");
+  await page.getByRole("button", { name: "Preview CSV", exact: true }).click();
+  await expect(page.locator("#import-result")).toContainText(
+    "existing receipt; no duplicate writes",
+  );
+  const response = await page.request.get(
+    "/api/admin/holdings?shareClassId=" + f.classId,
+  );
+  expect(await response.json()).toHaveLength(1);
+  const downloadPromise = page.waitForEvent("download");
+  await page
+    .getByRole("button", {
+      name: "Download validation report (JSON)",
+      exact: true,
+    })
+    .click();
+  expect((await downloadPromise).suggestedFilename()).toBe(
+    "nycap-opening-validation.json",
+  );
+  await ready(page);
+  await page.getByRole("button", { name: "CSV import", exact: true }).click();
+  await page
+    .getByRole("button", { name: "View import report", exact: true })
+    .first()
+    .click();
+  await expect(page.locator("#import-result")).toBeVisible();
+  const cacheText = await page.evaluate(async () => {
+    let text = "";
+    for (const key of await caches.keys()) {
+      const cache = await caches.open(key);
+      for (const request of await cache.keys())
+        text += await (await cache.match(request))!.text();
+    }
+    return text;
+  });
+  expect(cacheText).not.toContain(f.name);
+  expect(cacheText).not.toContain(f.profileId);
+  await context.setOffline(true);
+  await expect(
+    page.getByRole("heading", { name: "You are offline" }),
+  ).toBeVisible();
+  await expect(page.locator("#import-result")).toHaveCount(0);
 });
