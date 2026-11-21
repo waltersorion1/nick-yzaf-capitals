@@ -14,6 +14,7 @@ import { importRoutes } from "./imports/routes.js";
 import { reportingRoutes } from "./reporting/routes.js";
 import { recordRoutes } from "./records/routes.js";
 import { RecordError } from "./records/common.js";
+import { createLogger, type LogSink } from "./logging.js";
 const password = z.string().min(12).max(128);
 const email = z
   .string()
@@ -26,6 +27,7 @@ interface Options {
   secret: string;
   origin: string;
   production?: boolean;
+  logSink?: LogSink;
 }
 export function createApp({
   db,
@@ -33,20 +35,51 @@ export function createApp({
   secret,
   origin,
   production = false,
+  logSink,
 }: Options) {
   if (secret.length < 32)
     throw new Error("SESSION_SECRET must contain at least 32 characters");
   const app = express();
+  const log = createLogger(logSink);
   app.disable("x-powered-by");
   app.set("json replacer", (_key: string, value: unknown) =>
     typeof value === "bigint" ? value.toString() : value,
   );
   if (production) app.set("trust proxy", 1);
   app.use(helmet({ strictTransportSecurity: production ? undefined : false }));
-  app.use("/api", (_req, res, next) => {
+  app.use((req, res, next) => {
     res.locals.requestId = randomUUID();
     res.set("X-Request-ID", res.locals.requestId);
     res.set("Cache-Control", "no-store");
+    const start = performance.now();
+    const category = req.path.startsWith("/api/auth/")
+      ? "auth"
+      : req.path.startsWith("/api/admin/")
+        ? "admin"
+        : req.path.startsWith("/api/")
+          ? "shareholder"
+          : "public";
+    res.on("finish", () =>
+      log({
+        event: "http_request",
+        level: "info",
+        requestId: res.locals.requestId,
+        category,
+        method: [
+          "GET",
+          "HEAD",
+          "POST",
+          "PATCH",
+          "DELETE",
+          "PUT",
+          "OPTIONS",
+        ].includes(req.method)
+          ? req.method
+          : "OTHER",
+        status: res.statusCode,
+        durationMs: Math.round(performance.now() - start),
+      }),
+    );
     next();
   });
   app.use("/api/admin/imports/preview", express.json({ limit: "256kb" }));
@@ -132,8 +165,9 @@ export function createApp({
     await new Promise<void>((ok, fail) =>
       req.session.regenerate((err) => (err ? fail(err) : ok())),
     );
-    req.session.userId = user.id;
     await db.auditLog.create({ data: { actorId: user.id, action: "LOGIN" } });
+    // Do not authenticate a regenerated session unless the login audit succeeded.
+    req.session.userId = user.id;
     await new Promise<void>((ok, fail) =>
       req.session.save((err) => (err ? fail(err) : ok())),
     );
@@ -289,7 +323,11 @@ export function createApp({
       res.status(413).json({ error: "Request too large" });
       return;
     }
-    console.error("Request failed", { name: err?.name });
+    log({
+      event: "request_failed",
+      level: "error",
+      requestId: res.locals.requestId,
+    });
     res.status(500).json({ error: "Request failed" });
   };
   app.use(errors);

@@ -35,6 +35,86 @@ async function ready(page: Page) {
   await page.reload();
   await page.waitForFunction(() => navigator.serviceWorker.controller !== null);
 }
+
+test("logout clears another open tab and closed-window reopen revalidates the session", async ({
+  page,
+  context,
+}) => {
+  await login(page);
+  await ready(page);
+  const second = await context.newPage();
+  await second.goto("/");
+  await expect(
+    second.getByRole("heading", { name: "Ownership at a glance" }),
+  ).toBeVisible();
+  await page.getByRole("button", { name: "Sign out", exact: true }).click();
+  await expect(
+    second.getByRole("heading", { name: "Sign in to NyCap" }),
+  ).toBeVisible();
+  expect(await second.content()).not.toContain(fixture().member);
+  await second.close();
+  const reopened = await context.newPage();
+  await reopened.goto("/");
+  await expect(
+    reopened.getByRole("heading", { name: "Sign in to NyCap" }),
+  ).toBeVisible();
+  expect((await reopened.request.get("/api/me/holdings")).status()).toBe(401);
+  await reopened.close();
+});
+
+test("worker isolates its cache, private files stay network-only, and offline reopen has no identity", async ({
+  page,
+  context,
+}) => {
+  await login(page);
+  await ready(page);
+  await page.evaluate(async () => {
+    const unrelated = await caches.open("unrelated-regression-test");
+    await unrelated.put("/offline.html", new Response("POISONED FALLBACK"));
+    await unrelated.put("/assets/api-v4.js", new Response("POISONED SCRIPT"));
+    const own = (await caches.keys()).find((key) =>
+      key.startsWith("nycap-public-"),
+    )!;
+    await (await caches.open(own)).delete("/assets/api-v4.js");
+  });
+  expect(
+    await page.evaluate(async () => (await fetch("/assets/api-v4.js")).text()),
+  ).not.toContain("POISONED");
+  for (const path of [
+    "/api/me/holdings",
+    "/api/auth/me",
+    "/private-register.csv",
+    "/api/admin/imports",
+    "/?token=PRIVATE_QUERY",
+  ]) {
+    const response = await page.request.get(path);
+    expect(response.headers()["cache-control"]).toBe("no-store");
+  }
+  await context.setOffline(true);
+  const reopened = await context.newPage();
+  await reopened.goto("/");
+  await expect(
+    reopened.getByRole("heading", { name: /offline/i }),
+  ).toBeVisible();
+  expect(await reopened.content()).not.toMatch(/POISONED|FICTIONAL Browser/);
+  await reopened.close();
+  await context.setOffline(false);
+  await page.evaluate(async () => {
+    await caches.delete("unrelated-regression-test");
+  });
+  const stored = await page.evaluate(async () => {
+    const urls: string[] = [];
+    for (const key of await caches.keys())
+      for (const req of await (await caches.open(key)).keys())
+        urls.push(req.url);
+    return urls;
+  });
+  expect(
+    stored.every(
+      (url) => /\/(assets|icons)\//.test(url) || url.endsWith("/offline.html"),
+    ),
+  ).toBe(true);
+});
 test("navigation, real holdings isolation, company details and both themes", async ({
   page,
 }) => {

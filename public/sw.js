@@ -1,5 +1,5 @@
 // Public allowlist only. Never cache the root document, API, or authenticated responses.
-const CACHE = "nycap-public-v4";
+const CACHE = "nycap-public-v5";
 const PUBLIC = [
   "/offline.html",
   "/assets/admin-v4.js",
@@ -39,14 +39,14 @@ self.addEventListener("fetch", (event) => {
   const url = new URL(event.request.url);
   if (event.request.method !== "GET" || url.origin !== self.location.origin)
     return;
-  if (url.pathname.startsWith("/api/")) {
+  if (url.pathname === "/api" || url.pathname.startsWith("/api/")) {
     event.respondWith(fetch(event.request, { cache: "no-store" }));
     return;
   }
   if (event.request.mode === "navigate") {
     event.respondWith(
       fetch(event.request, { cache: "no-store" }).catch(() =>
-        caches.match("/offline.html"),
+        caches.open(CACHE).then((cache) => cache.match("/offline.html")),
       ),
     );
     return;
@@ -54,7 +54,9 @@ self.addEventListener("fetch", (event) => {
   if (PUBLIC.includes(url.pathname) && !url.search)
     event.respondWith(
       caches
-        .match(event.request)
+        .open(CACHE)
+        .then((cache) => cache.match(event.request))
         .then((hit) => hit || fetch(event.request, { cache: "no-store" })),
     );
+  else event.respondWith(fetch(event.request, { cache: "no-store" }));
 });

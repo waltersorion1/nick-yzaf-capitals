@@ -54,6 +54,133 @@ afterAll(async () => {
   await db.$disconnect();
 });
 describe("real PostgreSQL authentication and sessions", () => {
+  it("does not authenticate a session when its login audit fails", async () => {
+    const user = await db.user.create({
+      data: {
+        email: `audit-failure-${suffix}@example.test`,
+        passwordHash: await hashPassword(password),
+      },
+    });
+    const name = `login_fault_${suffix}`;
+    await pool.query(
+      `CREATE FUNCTION ${name}() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN IF NEW."actorId"='${user.id}'::uuid AND NEW.action='LOGIN' THEN RAISE EXCEPTION 'Fictional audit fault'; END IF; RETURN NEW; END $$`,
+    );
+    await pool.query(
+      `CREATE TRIGGER ${name} BEFORE INSERT ON audit_logs FOR EACH ROW EXECUTE FUNCTION ${name}()`,
+    );
+    try {
+      const agent = request.agent(app);
+      const login = await post(agent, "/api/auth/login", {
+        email: user.email,
+        password,
+      });
+      expect(login.status).toBe(500);
+      expect(login.body).toEqual({ error: "Request failed" });
+      expect((await agent.get("/api/auth/me")).status).toBe(401);
+      expect(
+        await db.auditLog.count({
+          where: { actorId: user.id, action: "LOGIN" },
+        }),
+      ).toBe(0);
+    } finally {
+      await pool.query(`DROP TRIGGER ${name} ON audit_logs`);
+      await pool.query(`DROP FUNCTION ${name}()`);
+    }
+  });
+  it("rejects expired/inactive invitations and simultaneous acceptance uses the token once", async () => {
+    for (const mode of ["expired", "inactive", "concurrent"]) {
+      const token = randomBytes(32).toString("hex");
+      const user = await db.user.create({
+        data: {
+          email: `day6-${mode}-${suffix}@example.test`,
+          active: mode !== "inactive",
+          inviteHash: tokenHash(token),
+          inviteExpiresAt: new Date(
+            Date.now() + (mode === "expired" ? -60000 : 60000),
+          ),
+        },
+      });
+      const first = request.agent(app),
+        second = request.agent(app);
+      if (mode === "concurrent") {
+        const results = await Promise.all([
+          post(first, "/api/auth/accept-invite", { token, password }),
+          post(second, "/api/auth/accept-invite", { token, password }),
+        ]);
+        expect(results.map((r) => r.status).sort()).toEqual([204, 400]);
+        expect(
+          await db.auditLog.count({
+            where: { actorId: user.id, action: "INVITE_ACCEPTED" },
+          }),
+        ).toBe(1);
+      } else {
+        expect(
+          (await post(first, "/api/auth/accept-invite", { token, password }))
+            .status,
+        ).toBe(400);
+        expect(
+          (await db.user.findUniqueOrThrow({ where: { id: user.id } }))
+            .passwordHash,
+        ).toBeNull();
+      }
+    }
+  });
+  it("rechecks roles in an existing session and rejects a replayed logout cookie", async () => {
+    const user = await db.user.create({
+      data: {
+        email: `revoked-${suffix}@example.test`,
+        role: "ADMIN",
+        passwordHash: await hashPassword(password),
+      },
+    });
+    const agent = request.agent(app);
+    const response = await post(agent, "/api/auth/login", {
+      email: user.email,
+      password,
+    });
+    const cookie = response.headers["set-cookie"][0].split(";")[0];
+    expect((await agent.get("/api/admin/companies")).status).toBe(200);
+    await db.user.update({
+      where: { id: user.id },
+      data: { role: "SHAREHOLDER" },
+    });
+    expect((await agent.get("/api/admin/companies")).status).toBe(403);
+    expect((await post(agent, "/api/auth/logout", {})).status).toBe(204);
+    expect(
+      (await request(app).get("/api/auth/me").set("Cookie", cookie)).status,
+    ).toBe(401);
+  });
+  it("logs request correlation and status without paths, credentials or private payloads", async () => {
+    const lines: string[] = [];
+    const logged = createApp({
+      db,
+      store,
+      secret: "logging-test-secret-at-least-32-characters",
+      origin: "http://localhost:3000",
+      logSink: (line) => {
+        lines.push(line);
+      },
+    });
+    const response = await request(logged)
+      .post("/api/auth/login?token=PRIVATE_QUERY")
+      .set("Authorization", "Bearer PRIVATE_HEADER")
+      .send({ password: "PRIVATE_PASSWORD", csv: "PRIVATE_CSV" });
+    expect(response.status).toBe(403);
+    expect(JSON.parse(lines[0])).toMatchObject({
+      event: "http_request",
+      status: 403,
+      category: "auth",
+      requestId: response.headers["x-request-id"],
+    });
+    expect(lines.join("")).not.toMatch(
+      /PRIVATE|login\?|password|authorization|cookie/i,
+    );
+    const missing = await request(logged).get(
+      "/private-document-does-not-exist?token=PRIVATE_QUERY",
+    );
+    expect(missing.headers["cache-control"]).toBe("no-store");
+    expect(missing.status).toBe(404);
+  });
   it("hashes passwords with unique salts", async () => {
     const a = await hashPassword(password),
       b = await hashPassword(password);

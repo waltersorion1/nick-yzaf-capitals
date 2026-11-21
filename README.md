@@ -1,8 +1,10 @@
-# NyCap â€” Days 1-5 shareholder portal
+# NyCap â€” Days 1-6 shareholder portal
 
-Express + strict TypeScript API, PostgreSQL + Prisma, and a same-origin Vanilla JS ES module shell. This repository implements **Days 1, 2, 3, 4 and 5** of `Codex_Playbook.md`, read in full. Day 2 adds protected company/class/profile CRUD, verified openings, immutable corrections and account-isolated holding reads. Day 3 provides the responsive shareholder portal and a read-only administrator overview. Day 4 adds announcements, indicative valuations and historical dividend records. Day 5 adds the admin workspace and reviewed CSV opening imports; trading and payment execution are excluded.
+Express + strict TypeScript API, PostgreSQL + Prisma, and a same-origin Vanilla JS ES module shell. This repository implements **Days 1, 2, 3, 4, 5 and 6** of `Codex_Playbook.md`, read in full. Day 2 adds protected company/class/profile CRUD, verified openings, immutable corrections and account-isolated holding reads. Day 3 provides the responsive shareholder portal and a read-only administrator overview. Day 4 adds announcements, indicative valuations and historical dividend records. Day 5 adds the admin workspace and reviewed CSV opening imports; trading and payment execution are excluded.
 
 ## Windows / VS Code setup
+
+Day 6 adds structured payload-free logs, stricter worker cache isolation and reproducible recovery checks. Run `npm run verify:isolated` with Docker Desktop to build/test against disposable fictional databases and perform a real backup/restore drill. See [TEST_REPORT.md](docs/TEST_REPORT.md) for executed results/device limitations and [DEPLOYMENT.md](docs/DEPLOYMENT.md) for backup, restore and operational procedures. Worker v5 uses the existing versioned v4 static assets; accept **Update and reload** when offered. No Day 6 migration or normal-database reset/seed is needed.
 
 1. Install Node.js **24 LTS** (tested with 24.13.1), VS Code and either PostgreSQL **17** or Docker Desktop (Linux containers). Prisma CLI, client and adapter are pinned together at 7.10.1. TypeScript and all direct packages are exact pins; commit `package-lock.json` and use `npm ci`. Do not run `prisma@latest` against this project.
 2. In VS Code choose **File â†’ Open Folder**, open this repository, then **Terminal â†’ New Terminal** (PowerShell). VS Code's built-in TypeScript support is sufficient. No global Prisma installation is needed. If execution policy blocks `npm.ps1`, use `npm.cmd` / `npx.cmd` instead of relaxing machine policy.
@@ -79,24 +81,30 @@ The shell supports sign-in, sign-out and token acceptance. Administrator account
 In browser DevTools **after signing in as the fictional admin**, use:
 
 ```javascript
-const { token } = await (await fetch('/api/auth/csrf', { cache: 'no-store' })).json();
-const response = await fetch('/api/admin/users', {
-  method: 'POST', headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': token },
-  body: JSON.stringify({ email: 'invited-person@example.test', role: 'SHAREHOLDER' }),
-  cache: 'no-store'
+const { token } = await (
+  await fetch("/api/auth/csrf", { cache: "no-store" })
+).json();
+const response = await fetch("/api/admin/users", {
+  method: "POST",
+  headers: { "Content-Type": "application/json", "X-CSRF-Token": token },
+  body: JSON.stringify({
+    email: "invited-person@example.test",
+    role: "SHAREHOLDER",
+  }),
+  cache: "no-store",
 });
 const invitation = await response.json();
 ```
 
 The response contains `invitationToken` **once**; deliver it privately and paste it into the shell's invitation form. It expires after 24 hours and can be consumed once. There is no email provider or automatic delivery. Do not put tokens in URLs, logs or browser storage. To create an already-active account, pass `password` (12â€“128 characters) in the admin request; prefer invitations so admins do not choose other users' passwords. Accepted roles are `ADMIN` and `SHAREHOLDER`; only an active administrator can assign either.
 
-| Route | Behavior |
-| --- | --- |
-| `GET /api/auth/csrf` | Establish session and return CSRF token |
-| `POST /api/auth/login` | Validate credentials, rotate session ID |
-| `GET /api/auth/me` | Return own ID, email and current server-checked role |
-| `POST /api/auth/logout` | Destroy server session and clear cookie |
-| `POST /api/admin/users` | Admin-only create or invite; audited transaction |
+| Route                          | Behavior                                                 |
+| ------------------------------ | -------------------------------------------------------- |
+| `GET /api/auth/csrf`           | Establish session and return CSRF token                  |
+| `POST /api/auth/login`         | Validate credentials, rotate session ID                  |
+| `GET /api/auth/me`             | Return own ID, email and current server-checked role     |
+| `POST /api/auth/logout`        | Destroy server session and clear cookie                  |
+| `POST /api/admin/users`        | Admin-only create or invite; audited transaction         |
 | `POST /api/auth/accept-invite` | Consume unexpired invitation and set password atomically |
 
 All POST requests need `X-CSRF-Token` from their current session. Login regenerates that session, so obtain a fresh token afterwards. JSON only; invalid input returns 400, missing identity 401, denied role/CSRF 403, duplicate email 409. Passwords use salted Node `scrypt`; invitation tokens are stored as SHA-256 digests. Login and invite acceptance share an IP rate limit (20 requests / 15 minutes). Limits are per-process and suited to one pilot instance; a shared limiter is required before scaling.
