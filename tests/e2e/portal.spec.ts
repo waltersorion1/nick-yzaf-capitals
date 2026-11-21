@@ -342,7 +342,10 @@ test("real worker update waits for consent and preserves in-progress sign-in", a
   await expect(page.getByLabel("Email address")).toHaveValue(
     "draft@example.test",
   );
-  await page.getByRole("button", { name: "Update and reload" }).click();
+  await Promise.all([
+    page.waitForEvent("load"),
+    page.getByRole("button", { name: "Update and reload" }).click(),
+  ]);
   await expect(page.getByLabel("Email address")).toHaveValue("");
   await expect(
     page.getByRole("button", { name: "Update and reload" }),

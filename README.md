@@ -4,6 +4,8 @@ Express + strict TypeScript API, PostgreSQL + Prisma, and a same-origin Vanilla 
 
 ## Windows / VS Code setup
 
+Day 7's production package targets the owner's Hostinger KVM 2 VPS at **capital.nickyzaf.xyz**. It adds production Docker/Compose, Caddy HTTPS, file secrets, restricted database roles, private owner bootstrap, health checks and age-encrypted backups. Run `npm run test:production` for the loopback-only production-mode smoke/restore test. **Live launch remains NO-GO** until [PILOT_SIGNOFF.md](PILOT_SIGNOFF.md) is completed: SSH access, DNS, signed-source paths, approved off-host backup/recovery and owner pilot approval are pending. See [Day 7 results](docs/DAY7_REPORT.md) and the [Hostinger deployment procedure](docs/DEPLOYMENT.md). No real records or pilot invitations are created by the test.
+
 Day 6 adds structured payload-free logs, stricter worker cache isolation and reproducible recovery checks. Run `npm run verify:isolated` with Docker Desktop to build/test against disposable fictional databases and perform a real backup/restore drill. See [TEST_REPORT.md](docs/TEST_REPORT.md) for executed results/device limitations and [DEPLOYMENT.md](docs/DEPLOYMENT.md) for backup, restore and operational procedures. Worker v5 uses the existing versioned v4 static assets; accept **Update and reload** when offered. No Day 6 migration or normal-database reset/seed is needed.
 
 1. Install Node.js **24 LTS** (tested with 24.13.1), VS Code and either PostgreSQL **17** or Docker Desktop (Linux containers). Prisma CLI, client and adapter are pinned together at 7.10.1. TypeScript and all direct packages are exact pins; commit `package-lock.json` and use `npm ci`. Do not run `prisma@latest` against this project.

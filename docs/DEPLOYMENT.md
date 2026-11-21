@@ -58,3 +58,72 @@ Operational stdout logs are newline JSON: UTC timestamp, fixed event/level, gene
 Use one Express instance behind exactly one trusted HTTPS reverse proxy, private backend/DB ports, exact HTTPS APP_ORIGIN and a randomly generated SESSION_SECRET outside Git. Build using npm ci, db:generate and build; migrate before runtime. A second replica requires shared login throttling. Before launch verify Secure/HttpOnly/SameSite cookies, no-store API/HTML/errors, worker `/` scope, manifest/icons, generic offline shell and explicit update acceptance on the final origin. Domain/hosting, encrypted off-host backups, owner-approved legal sources, physical device checks and pilot sign-off remain launch dependencies.
 
 Primary references: [PostgreSQL pg_dump](https://www.postgresql.org/docs/17/app-pgdump.html), [pg_restore](https://www.postgresql.org/docs/17/app-pgrestore.html), [MDN cache lookup](https://developer.mozilla.org/en-US/docs/Web/API/CacheStorage/match), [OWASP logging](https://cheatsheetseries.owasp.org/cheatsheets/Logging_Cheat_Sheet.html).
+
+## Day 7: Hostinger KVM 2 / capital.nickyzaf.xyz
+
+**Current decision: NO-GO; see [PILOT_SIGNOFF.md](../PILOT_SIGNOFF.md).** The owner supplied the target/domain and says signed registers are available. SSH access/register paths/off-host backup destination remain pending. DNS A lookup returned name does not exist. No live deployment/import/invitation has happened. Do not connect to unrelated SSH aliases or overwrite an existing VPS web stack.
+
+### Review and local production-like test
+
+```powershell
+npm run build
+npx vitest run tests/operations.test.ts
+npm run test:production
+```
+
+The last command builds real Linux Node 24.13.1 runtime/migration containers, PostgreSQL 17.7, Caddy 2.10.2 and an age-enabled PostgreSQL backup image. It binds **only loopback** ports 9087/9447, uses a private internal CA, production secure sessions, a restricted runtime role, fictional admin/shareholders/openings/CSV and real rebuilt-image worker updates. It encrypts a backup, decrypts it with a test-only private key and restores into a NEW database with matching fingerprints and no sessions. Its unique Compose project/volumes are removed in finally; ignored `.local/nycap-smoke-*` artifacts are private. Never use its fictional users or internal CA as live pilot data. Browser TLS bypass is test-only; a Node HTTPS client separately validates the CA chain. Public ACME/physical installation must still be tested on the actual origin. Ensure 9087/9447 are free first; do not stop unrelated listeners.
+
+### VPS prerequisites (not yet executed)
+
+1. Supply verified SSH host/user/key and approved directory. Inventory existing ports/services/proxies, disk, Docker/Compose and firewall. Use a dedicated deployment user; preserve existing sites. If 80/443 belong to an existing proxy, integrate the private backend with it rather than replacing that service.
+2. Point `capital.nickyzaf.xyz` A to the verified VPS IPv4 and set AAAA only if IPv6 is configured. Confirm authoritative DNS and public reachability before ACME. Keep SSH restricted to owner/admin addresses and database/backend ports unexposed; allow public 80/443 only for the intended HTTPS proxy/ACME. Review [Hostinger firewall setup](https://www.hostinger.com/support/4805502-how-to-set-up-a-firewall-at-vps/).
+3. On the VPS, clone the verified main commit under `/opt/nycap/repository`. Install Docker Engine/Compose from official instructions. The following commands are Bash on the VPS, **not PowerShell**; replace the approved directories if needed.
+
+```bash
+cd /opt/nycap/repository
+node deploy/provision.mjs /opt/nycap/secrets
+install -d -m 700 /opt/nycap/backups
+cp deploy/pilot.env.example /opt/nycap/pilot.env
+chmod 600 /opt/nycap/pilot.env
+# Edit owner ACME email, exact APP_ORIGIN, secret/backup paths; never insert passwords here.
+```
+
+Provision requires Node 24, available directly or via `docker run --rm -v /opt/nycap:/opt/nycap -w /opt/nycap/repository node:24.13.1-bookworm-slim node deploy/provision.mjs /opt/nycap/secrets`. Secret directories must be owner-controlled mode 0700. Mounted files are readable by the non-root app (0444; mutable public recipient/access policy 0644); the 0700 parent prevents other host users reading them. Role-creation SQL stays 0600. Docker daemon/root access can read mounted secrets; Compose file secrets are **not encrypted at rest**. Use encrypted VPS disks/protected host backups and never store this directory in the Git clone, public files or image build context. Windows mode bits do not establish equivalent ACL protection: apply explicit Windows ACLs if using real secrets locally.
+
+4. Generate an age identity on the owner's trusted **off-host** recovery device (`age-keygen -o backup-identity.txt`), protect its private key separately and copy only `age-keygen -y backup-identity.txt` output to `/opt/nycap/secrets/backup_recipient`. Configure an approved encrypted off-host destination with alerting/retention and prove key recovery. No destination is currently configured.
+5. Replace the fail-closed `/opt/nycap/secrets/edge_policy` with an owner-approved IP allowlist before private owner testing. Example (replace the documentation IP with the actual admin address):
+
+```caddyfile
+@blocked not remote_ip 192.0.2.10/32
+respond @blocked "Private pilot" 403
+```
+
+Do not use `tls internal` on the public origin, remove private access control merely to bypass a failed check, or enable raw access logging. Direct connections to Caddy must preserve real source IP; an upstream CDN/proxy requires a separately reviewed trust/access policy. Automatic public HTTPS/renewal uses the configured domain and owner email. See [Caddy HTTPS/reverse proxy](https://caddyserver.com/docs/quick-starts/reverse-proxy), [TLS](https://caddyserver.com/docs/caddyfile/directives/tls) and [Compose secrets](https://docs.docker.com/compose/how-tos/use-secrets/).
+
+### Initial provisioning and each release
+
+Run from the checked-out repository. The shell function avoids accidentally using the local-development Compose file. No secret value goes on the command line.
+
+```bash
+dc() { docker compose --env-file /opt/nycap/pilot.env -p nycap-pilot -f deploy/compose.yaml "$@"; }
+dc build --build-arg RELEASE_ID="$(git rev-parse --short HEAD)" app migrate backup
+dc up -d --wait db
+# FIRST EMPTY DATABASE ONLY; subsequent releases take an encrypted pre-migration backup first.
+dc run --rm migrate
+dc exec -T db psql -U nycap_owner -d nycap -v ON_ERROR_STOP=1 < /opt/nycap/secrets/create-roles.sql
+dc exec -T db psql -U nycap_owner -d nycap -v ON_ERROR_STOP=1 < deploy/runtime-grants.sql
+# Set the real owner's approved address in /opt/nycap/pilot.env as BOOTSTRAP_ADMIN_EMAIL.
+dc run --rm bootstrap
+dc up -d --wait app proxy
+dc run --rm backup
+```
+
+Role creation and first-owner bootstrap deliberately fail if repeated; skip them on subsequent releases. Use bootstrap only on an empty real user register; its random admin password is in the private `admin_password` file and is never printed. No development seed is packaged in the runtime image or automatically run. The bootstrap is an owner account, not authorization to invite a pilot group. Compose runtime is non-root/read-only with capabilities dropped; runtime role cannot DDL/TRUNCATE/modify audit evidence. Migration-owner secrets are mounted only in the ops migration service. Treat owner/role provisioning SQL as confidential; remove the one-time role file when safely provisioned. Back up before subsequent `dc run --rm migrate`, then reapply/review grants after any new tables and redeploy the compatible app release. Keep exact image/commit/migration evidence. Rollback follows the new-database recovery procedure above; never drop/reset the live register.
+
+### Health, backups, real records and release
+
+`GET /health/live` returns minimal process liveness; `/health/ready` checks session table and all four successful migrations. Both are no-store, disclose no database details and create no session. Docker health checks use internal HTTP for these two routes; production API/static traffic requires HTTPS. Readiness is not a legal-source check. Probe the live HTTPS origin from an approved address and confirm cookie/security headers, `/sw.js` scope `/`, manifest/icon links, cache privacy/offline and real worker update behavior. Record results in PILOT_SIGNOFF.md; do not infer them from localhost.
+
+Install the reviewed `deploy/nycap-backup.service` and `.timer` under `/etc/systemd/system` only AFTER paths, recipient, off-host transfer, failure alerts and retention are assigned. `systemd-analyze verify` the units, run the service manually, verify encrypted archive checksum and off-host copy, then enable the timer with `systemctl enable --now nycap-backup.timer`. The template schedules daily UTC 02:00 plus small random delay and catches missed runs. It currently creates a same-host encrypted archive only: add a monitored transfer using the destination's authenticated tooling; do not claim off-host protection until copied/restored successfully. Retention deletion is deliberately not automated before approval/verified off-host recovery. Back up Caddy certificates/account state and host/role configuration separately.
+
+For human-verified records, use the documented CSV workflow after inspecting supplied signed registers privately. Record reviewer/signature/date and file checksum, verify legal identities/classes, preview and compare exact existing/imported/final totals against signed sources, commit the reviewed batch, and compare receipt/ledger/snapshot totals class by class. If any mapping/quantity/evidence/total differs, stop without partial import and ask the human reviewer to resolve it. Do not fabricate a register, treat fictional fixtures as production or check legal-accuracy sign-off on the owner's behalf. Keep actual source rows/checksums/receipt IDs in restricted evidence, not a public Git commit. Pilot invitations require the owner's separate explicit security/accuracy/restoration approval and named pilot group after every launch gate passes.

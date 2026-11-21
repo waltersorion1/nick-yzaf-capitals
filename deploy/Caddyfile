@@ -1,0 +1,20 @@
+{
+  email {$ACME_EMAIL}
+  admin off
+  log {
+    format filter {
+      wrap json
+      fields {
+        request delete
+      }
+    }
+  }
+}
+
+{$PILOT_HOST} {
+  import /run/secrets/edge_policy
+  header >Cache-Control "no-store"
+  header -Server
+  # No access-log directive: URLs, authentication and payloads must not reach access logs.
+  reverse_proxy app:3000
+}

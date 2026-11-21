@@ -1,0 +1,109 @@
+name: nycap-pilot
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+services:
+  db:
+    image: postgres:17.7
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: nycap_owner
+      POSTGRES_DB: nycap
+      POSTGRES_PASSWORD_FILE: /run/secrets/db_owner_password
+    secrets: [db_owner_password]
+    volumes: ["postgres:/var/lib/postgresql/data"]
+    networks: [database]
+    logging: *logging
+    healthcheck:
+      test: [CMD-SHELL, "pg_isready -U nycap_owner -d nycap"]
+      interval: 5s
+      retries: 20
+  migrate:
+    build: { context: .., target: migrate }
+    environment: { DATABASE_URL_FILE: /run/secrets/owner_url }
+    secrets: [owner_url]
+    networks: [database]
+    depends_on: { db: { condition: service_healthy } }
+    profiles: [ops]
+    logging: *logging
+  app:
+    image: "${COMPOSE_PROJECT_NAME:-nycap-pilot}-app:local"
+    build: { context: .., target: runtime }
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      APP_ORIGIN: ${APP_ORIGIN:?Set exact HTTPS APP_ORIGIN}
+      DATABASE_URL_FILE: /run/secrets/runtime_url
+      SESSION_SECRET_FILE: /run/secrets/session_secret
+    secrets: [runtime_url, session_secret]
+    networks: [database, edge]
+    depends_on: { db: { condition: service_healthy } }
+    read_only: true
+    tmpfs: [/tmp]
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    logging: *logging
+  proxy:
+    image: caddy:2.10.2-alpine
+    restart: unless-stopped
+    environment:
+      PILOT_HOST: ${PILOT_HOST:?Set PILOT_HOST}
+      ACME_EMAIL: ${ACME_EMAIL:?Set ACME_EMAIL}
+    ports: ["${HTTP_BIND:-80}:80", "${HTTPS_BIND:-443}:443"]
+    volumes:
+      [
+        "./Caddyfile:/etc/caddy/Caddyfile:ro",
+        "caddy_data:/data",
+        "caddy_config:/config",
+      ]
+    secrets: [edge_policy]
+    networks: [edge]
+    depends_on: { app: { condition: service_healthy } }
+    logging: *logging
+  backup:
+    build: { context: .., target: backup }
+    environment:
+      PGHOST: db
+      PGDATABASE: nycap
+      PGUSER: nycap_backup
+      PGPASSWORD_FILE: /run/secrets/backup_password
+    secrets: [backup_password, backup_recipient]
+    volumes: ["${BACKUP_DIRECTORY:?Set private BACKUP_DIRECTORY}:/backups"]
+    networks: [database]
+    profiles: [ops]
+    logging: *logging
+  bootstrap:
+    image: "${COMPOSE_PROJECT_NAME:-nycap-pilot}-app:local"
+    pull_policy: never
+    environment:
+      NODE_ENV: production
+      APP_ORIGIN: ${APP_ORIGIN:?Set exact HTTPS APP_ORIGIN}
+      DATABASE_URL_FILE: /run/secrets/runtime_url
+      SESSION_SECRET_FILE: /run/secrets/session_secret
+      BOOTSTRAP_ADMIN_EMAIL: ${BOOTSTRAP_ADMIN_EMAIL:-}
+      BOOTSTRAP_ADMIN_PASSWORD_FILE: /run/secrets/admin_password
+      ALLOW_ADMIN_BOOTSTRAP: "1"
+    secrets: [runtime_url, session_secret, admin_password]
+    networks: [database]
+    profiles: [ops]
+    command: [node, dist/src/ops/bootstrap-admin.js]
+    logging: *logging
+secrets:
+  db_owner_password:
+    { file: "${SECRETS_DIRECTORY:?Set SECRETS_DIRECTORY}/db_owner_password" }
+  owner_url: { file: "${SECRETS_DIRECTORY}/owner_url" }
+  runtime_url: { file: "${SECRETS_DIRECTORY}/runtime_url" }
+  session_secret: { file: "${SECRETS_DIRECTORY}/session_secret" }
+  edge_policy: { file: "${SECRETS_DIRECTORY}/edge_policy" }
+  backup_password: { file: "${SECRETS_DIRECTORY}/backup_password" }
+  backup_recipient: { file: "${SECRETS_DIRECTORY}/backup_recipient" }
+  admin_password: { file: "${SECRETS_DIRECTORY}/admin_password" }
+networks:
+  database: { internal: true }
+  edge: {}
+volumes:
+  postgres: {}
+  caddy_data: {}
+  caddy_config: {}

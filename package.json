@@ -18,7 +18,8 @@
     "postinstall": "npm run assets",
     "test:e2e": "playwright test",
     "verify:isolated": "node scripts/verify-isolated.mjs",
-    "recovery:drill": "node scripts/recovery-drill.mjs"
+    "recovery:drill": "node scripts/recovery-drill.mjs",
+    "test:production": "node scripts/production-smoke.mjs"
   },
   "dependencies": {
     "@prisma/adapter-pg": "7.10.1",

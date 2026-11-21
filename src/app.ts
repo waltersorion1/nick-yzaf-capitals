@@ -82,6 +82,37 @@ export function createApp({
     );
     next();
   });
+  app.get("/health/live", (_req, res) => res.json({ status: "ok" }));
+  app.get("/health/ready", async (_req, res) => {
+    try {
+      await db.$queryRaw`SELECT 1 FROM sessions LIMIT 0`;
+      const migrations = await db.$queryRaw<
+        Array<{ migration_name: string }>
+      >`SELECT migration_name FROM _prisma_migrations WHERE finished_at IS NOT NULL AND rolled_back_at IS NULL`;
+      const required = [
+        "202611210001_day1",
+        "202611210002_day2",
+        "202611210003_day4",
+        "202611210004_day5",
+      ];
+      if (
+        !required.every((name) =>
+          migrations.some((row) => row.migration_name === name),
+        )
+      )
+        throw new Error("Migrations required");
+      res.json({ status: "ready" });
+    } catch {
+      res.status(503).json({ status: "unavailable" });
+    }
+  });
+  app.use((req, res, next) => {
+    if (production && !req.secure) {
+      res.status(400).json({ error: "HTTPS required" });
+      return;
+    }
+    next();
+  });
   app.use("/api/admin/imports/preview", express.json({ limit: "256kb" }));
   app.use(express.json({ limit: "16kb" }));
   app.use(

@@ -1,0 +1,11 @@
+[Unit]
+Description=NyCap daily encrypted backup
+
+[Timer]
+OnCalendar=*-*-* 02:00:00 UTC
+Persistent=true
+RandomizedDelaySec=300
+Unit=nycap-backup.service
+
+[Install]
+WantedBy=timers.target

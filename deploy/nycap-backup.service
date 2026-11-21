@@ -1,0 +1,12 @@
+[Unit]
+Description=NyCap encrypted logical database backup
+Requires=docker.service
+After=docker.service
+
+[Service]
+Type=oneshot
+WorkingDirectory=/opt/nycap/repository
+UMask=0077
+ExecStart=/usr/bin/docker compose --env-file /opt/nycap/pilot.env -p nycap-pilot -f deploy/compose.yaml run --rm backup
+# Configure OnFailure monitoring and encrypted off-host transfer before enabling the timer.
+# A successful same-host archive is not an off-host backup or launch approval.
