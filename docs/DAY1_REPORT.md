@@ -26,7 +26,7 @@ Environment: Windows PowerShell, Node 24.13.1, npm 11.8.0, PostgreSQL 17.7, Pris
 | --- | --- |
 | `Get-Content Codex_Playbook.md -Raw`, repository/instruction discovery and `git status --short` | Full playbook read; initially only README/playbook present |
 | `node --version`, `npm --version` | Versions above |
-| `docker info --format '{{.ServerVersion}}'`, attempted hidden Docker Desktop startup | Docker engine unavailable; Compose not validated |
+| `docker info --format '{{.ServerVersion}}'`, attempted hidden Docker Desktop startup | Initially unavailable; resolved and Compose validated in the Docker follow-up below |
 | `npm install` (initial and dependency remediation), `npm ci` | Final clean install succeeded; local Bootstrap asset copy ran |
 | `npm run db:generate` | Prisma Client generated successfully |
 | `npm run db:migrate` with each isolated database URL | Initial migration applied successfully from empty PostgreSQL databases |
@@ -57,9 +57,31 @@ Intermediate failures were resolved: Vitest 5 removed the `describe.sequential` 
 ## Known limits and next dependencies
 
 - Browser/device PWA installation, service-worker offline/cache-storage/update flows, mobile/iOS and HTTPS deployment were **not tested**. Day 1 includes the foundation; full Day 3/6 PWA acceptance remains outstanding. HTTP routes and icon sizes passing do not prove installability.
-- The Windows installer/service-creation instructions and optional Compose file were documented, not executed here. Docker Desktop could not start.
+- Windows installer/service-creation instructions remain unexecuted. Docker Compose was subsequently validated successfully; see the follow-up below.
 - No production `.env`, HTTPS ingress, real admin bootstrap, deployment, backups or restore drill was configured. The documented production trust-proxy setting assumes exactly one trusted ingress.
 - Invitation delivery is manual and private; there is no mail provider, password reset or administrator UI yet. IP rate limiting uses a single-process memory counter; share it before multiple instances.
 - Initial holdings are snapshots only. Before any Day 2 editing API, implement the append-only adjustment ledger, reconciliation and object-level permissions required by the playbook. No holdings endpoint exists to expose another account’s records.
 - Tests retain synthetic users and append-only audits in the disposable test DB; never point them at a real register. Development database ownership is convenient for migrations but production needs restricted runtime permissions.
 - Next work requires an explicit Day 2 request. No Day 2–7 feature work was performed.
+
+## Docker follow-up — 21 November 2026
+
+The owner repaired Docker Desktop. Rechecked the existing `compose.yaml` with Docker Engine **29.9.3** and Docker Compose **v5.7.0**. No Compose or application code changes were needed. Updated README to describe Docker as an alternative to a Windows PostgreSQL service, wait for health before connecting, explain one-time test database creation, match connection passwords, and distinguish persistent-volume passwords from shell settings.
+
+Validation used a fresh isolated project, `nycap-check-0fc4e41e7a`, random temporary credentials, and the committed `postgres:17.7` image. No existing database or `.env` was changed. PostgreSQL reported **17.7 (Debian)**.
+
+| Executed check | Result |
+| --- | --- |
+| `docker info --format '{{.ServerVersion}}'`, `docker compose version` | Docker engine and Compose respond successfully |
+| `docker compose -p <isolated-project> config --quiet` | Configuration valid |
+| `docker compose -p <isolated-project> up -d --wait db` | Image pulled; container started and healthy on localhost:5432 |
+| `docker compose -p <isolated-project> exec -T db createdb -U nycap -O nycap nycap_test` | Separate test database created |
+| `npm run db:generate` | Prisma Client generated |
+| `npm run db:migrate` against fresh `nycap` and `nycap_test` | Existing initial migration applied successfully to both; no new migration |
+| `npm run db:seed` twice | Passed; counts remained 3 companies, 3 classes, 2 users, 1 shareholder, 3 holdings; 2 seed audit entries |
+| `npm test` against Docker PostgreSQL | **19 tests passed**, 1 file, 7.80 seconds |
+| `npm run build` | Passed |
+| Compiled server startup and real HTTP checks on localhost:3102 | Root, manifest, icons, offline page and worker returned 200; anonymous auth endpoint returned 401; all no-store; clean shutdown |
+| `docker compose -p <isolated-project> down --volumes` | Removed only this disposable validation container, network and volume |
+
+The Docker blocker is resolved. The pulled image remains available for normal local use; the disposable validation database was removed after testing. Follow README to start your persistent development database with your own private password. Browser/device PWA acceptance, Windows native-service setup, and production deployment remain untested as previously noted. Day 1 scope is unchanged.

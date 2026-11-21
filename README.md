@@ -1,11 +1,11 @@
-# NyCap — Day 1 foundation
+# NyCap â€” Day 1 foundation
 
 Express + strict TypeScript API, PostgreSQL + Prisma, and a same-origin Vanilla JS ES module shell. This repository implements **Day 1 only** of `Codex_Playbook.md`, read in full. There are no holding APIs, admin record CRUD, valuation screens, trading or payment functions.
 
 ## Windows / VS Code setup
 
-1. Install Node.js **24 LTS** (tested with 24.13.1), VS Code and PostgreSQL **17**. Prisma CLI, client and adapter are pinned together at 7.10.1. TypeScript and all direct packages are exact pins; commit `package-lock.json` and use `npm ci`. Do not run `prisma@latest` against this project.
-2. In VS Code choose **File → Open Folder**, open this repository, then **Terminal → New Terminal** (PowerShell). VS Code's built-in TypeScript support is sufficient. No global Prisma installation is needed. If execution policy blocks `npm.ps1`, use `npm.cmd` / `npx.cmd` instead of relaxing machine policy.
+1. Install Node.js **24 LTS** (tested with 24.13.1), VS Code and either PostgreSQL **17** or Docker Desktop (Linux containers). Prisma CLI, client and adapter are pinned together at 7.10.1. TypeScript and all direct packages are exact pins; commit `package-lock.json` and use `npm ci`. Do not run `prisma@latest` against this project.
+2. In VS Code choose **File â†’ Open Folder**, open this repository, then **Terminal â†’ New Terminal** (PowerShell). VS Code's built-in TypeScript support is sufficient. No global Prisma installation is needed. If execution policy blocks `npm.ps1`, use `npm.cmd` / `npx.cmd` instead of relaxing machine policy.
 3. Run:
 
 ```powershell
@@ -14,7 +14,7 @@ Copy-Item .env.example .env
 node -e "console.log(require('node:crypto').randomBytes(48).toString('hex'))"
 ```
 
-Paste that random output into `SESSION_SECRET` in `.env`. Replace the database password in `DATABASE_URL`, URL-encoding special characters. Keep `.env` private. Set a separate `SEED_ADMIN_PASSWORD` of 12–128 characters if using the fictional demo seed. The seed never runs automatically.
+Paste that random output into `SESSION_SECRET` in `.env`. Replace the database password in `DATABASE_URL`, URL-encoding special characters. Keep `.env` private. Set a separate `SEED_ADMIN_PASSWORD` of 12â€“128 characters if using the fictional demo seed. The seed never runs automatically.
 
 ## PostgreSQL service and databases
 
@@ -42,15 +42,17 @@ CREATE DATABASE nycap_test OWNER nycap;
 
 Expected: `CREATE ROLE`, then `CREATE DATABASE` twice. This development role owns only the two development databases; do not run the app as `postgres`. PostgreSQL uses roles for database logins, unlike MySQL's `user@host` accounts. `public` is a schema (namespace) **inside** each database, not a public-access flag. Production should use distinct migration-owner and restricted runtime roles.
 
-Docker alternative, only if Docker Desktop's Linux engine works:
+Docker alternative (use this instead of installing a Windows PostgreSQL service):
 
 ```powershell
 $env:POSTGRES_PASSWORD = 'choose-a-private-local-password'
-docker compose up -d db
+docker compose up -d --wait db
 docker compose exec db createdb -U nycap -O nycap nycap_test
 ```
 
-This binds PostgreSQL to localhost and retains its data in a named volume. Do not delete the volume to resolve migration errors. Docker was unavailable in the implementation environment; see `docs/DAY1_REPORT.md` for the actual validation method.
+Compose creates the `nycap` database automatically; `createdb` creates the separate test database once. If `nycap_test` already exists, skip that command. Set the password in your `.env` `DATABASE_URL` to the same value as `POSTGRES_PASSWORD`, and URL-encode special characters. The app runs on Windows with `npm run dev` or `npm start`; only PostgreSQL runs in Docker. This image's development user has database-administration privileges; do not reuse it for production.
+
+This binds PostgreSQL to localhost:5432 and retains data in a named volume. Stop any other database using that port before starting Compose. Use `docker compose stop db` to stop it and `docker compose up -d --wait db` to resume. Do not delete the volume to resolve migration errors. Changing `POSTGRES_PASSWORD` does not change the password inside an already-initialized volume; reuse the original password or deliberately change it with SQL. See `docs/DAY1_REPORT.md` for validation results.
 
 ## Generate, migrate, seed and run
 
@@ -86,7 +88,7 @@ const response = await fetch('/api/admin/users', {
 const invitation = await response.json();
 ```
 
-The response contains `invitationToken` **once**; deliver it privately and paste it into the shell's invitation form. It expires after 24 hours and can be consumed once. There is no email provider or automatic delivery. Do not put tokens in URLs, logs or browser storage. To create an already-active account, pass `password` (12–128 characters) in the admin request; prefer invitations so admins do not choose other users' passwords. Accepted roles are `ADMIN` and `SHAREHOLDER`; only an active administrator can assign either.
+The response contains `invitationToken` **once**; deliver it privately and paste it into the shell's invitation form. It expires after 24 hours and can be consumed once. There is no email provider or automatic delivery. Do not put tokens in URLs, logs or browser storage. To create an already-active account, pass `password` (12â€“128 characters) in the admin request; prefer invitations so admins do not choose other users' passwords. Accepted roles are `ADMIN` and `SHAREHOLDER`; only an active administrator can assign either.
 
 | Route | Behavior |
 | --- | --- |
@@ -121,6 +123,6 @@ The suite refuses a missing test URL or an identical normal/test URL. Use a dedi
 
 Manifest, 192/512 PNG maskable icons, service worker registration, public static assets and generic offline fallback are present. Localhost works as a secure browser context; outside localhost use HTTPS. The service worker caches only explicitly listed, versioned public JS/CSS/icons and `/offline.html`. Root HTML, API, account and investor data are never stored by it. API and document responses use `Cache-Control: no-store`; application code does not use localStorage, IndexedDB or persistent credentials. Offline launch shows only a generic message; it cannot show or edit holdings.
 
-For updates change the cache version and asset filenames/allowlist, visit online, then choose **Update app and reload** when the waiting worker is detected. The worker does not activate itself over an existing session. Full browser installation, update, mobile and privacy acceptance tests remain Day 3/6 work; HTTP asset tests do not establish device installability. Android/desktop Chrome may offer Install; on iOS Safari use Share → Add to Home Screen where available. Native prompts vary.
+For updates change the cache version and asset filenames/allowlist, visit online, then choose **Update app and reload** when the waiting worker is detected. The worker does not activate itself over an existing session. Full browser installation, update, mobile and privacy acceptance tests remain Day 3/6 work; HTTP asset tests do not establish device installability. Android/desktop Chrome may offer Install; on iOS Safari use Share â†’ Add to Home Screen where available. Native prompts vary.
 
 See [the Day 1 validation report](docs/DAY1_REPORT.md) for executed checks and [architecture notes](docs/ARCHITECTURE.md) for TypeScript/Prisma learning notes and security boundaries. Before deployment: configure HTTPS, exactly one trusted reverse proxy, private secrets, database TLS appropriate to your provider, restricted DB permissions and a production-only admin provisioning process. No deployment or real-user invitation is included in Day 1.
